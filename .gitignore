@@ -39,3 +39,7 @@ Thumbs.db
 *.log
 logs/
 *.pid
+
+# Docs internos y skills de Claude
+docs/
+.claude/skills/
