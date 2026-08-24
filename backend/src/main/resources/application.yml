@@ -44,6 +44,26 @@ management:
       probes:
         enabled: true
 
+cellier:
+  auth:
+    google:
+      # Client id de OAuth de Google. Se exige como `aud` de cada ID token.
+      client-id: ${GOOGLE_CLIENT_ID}
+      jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+      # Google emite el claim `iss` en estas dos formas; ambas son legitimas.
+      allowed-issuers:
+        - https://accounts.google.com
+        - accounts.google.com
+      jwks-cache-ttl: PT1H
+      clock-skew: PT60S
+    jwt:
+      issuer: ${JWT_ISSUER:https://cellier.app}
+      # Clave HMAC de los access token. Minimo 32 bytes.
+      secret: ${JWT_SECRET}
+      access-token-ttl: PT15M
+    refresh-token:
+      ttl: P30D
+
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -72,6 +92,15 @@ spring:
       hibernate:
         format_sql: true
     show-sql: ${JPA_SHOW_SQL:false}
+
+cellier:
+  auth:
+    google:
+      # Marcador de posicion: pon aqui tu client id real para que el login con Google funcione.
+      client-id: ${GOOGLE_CLIENT_ID:cellier-dev-client-id.apps.googleusercontent.com}
+    jwt:
+      # Secreto de desarrollo. NO se usa en prod: alli la variable es obligatoria.
+      secret: ${JWT_SECRET:cellier-dev-secret-no-usar-en-produccion-0123456789}
 
 logging:
   level:

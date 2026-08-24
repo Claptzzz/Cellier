@@ -116,10 +116,48 @@ router de Angular funcionan al recargar la página: las rutas desconocidas se re
 Sin el perfil `-Pfrontend`, `./mvnw clean package` construye solo el backend (más rápido para
 iterar en la API).
 
+## Autenticación
+
+Cellier usa Google Sign-In para identificar al usuario, pero **no** reutiliza el token de
+Google como credencial de la API:
+
+1. El frontend obtiene un ID token de Google Identity Services.
+2. Lo envía a `POST /api/v1/auth/google`.
+3. El backend valida ese ID token contra el JWKS de Google (firma, emisor, audiencia,
+   vigencia y correo verificado) y emite **credenciales propias**: un access token JWT de
+   15 minutos y un refresh token opaco de 30 días.
+4. A partir de ahí, cada petición viaja con `Authorization: Bearer <accessToken>`.
+
+Detalles que conviene conocer al integrar el cliente:
+
+- **El refresh token rota.** Cada llamada a `/api/v1/auth/refresh` revoca el token
+  presentado y entrega uno nuevo. Guarda siempre el último.
+- **Reutilizar un refresh token gastado revoca todas las sesiones del usuario.** Es la
+  respuesta a que ese token esté circulando fuera del cliente legítimo.
+- En la base de datos solo vive el **SHA-256** del refresh token, nunca el valor en claro.
+- Un 401 con detalle `Se requiere un access token válido` significa que no mandaste token;
+  uno con `El access token no es válido o ha caducado` significa que toca refrescar.
+- Los errores se devuelven como `application/problem+json` (RFC 9457) y nunca incluyen
+  trazas de pila.
+
+### Configurar el client id de Google
+
+En la [consola de Google Cloud](https://console.cloud.google.com/apis/credentials) crea una
+credencial OAuth 2.0 de tipo *aplicación web*, añade `http://localhost:4200` a los orígenes
+autorizados y copia el client id a tu `.env`:
+
+```
+GOOGLE_CLIENT_ID=123456789012-ejemplo.apps.googleusercontent.com
+JWT_SECRET=$(openssl rand -base64 48)
+```
+
+Sin un `GOOGLE_CLIENT_ID` real, la aplicación arranca igual y el resto de la API funciona,
+pero `POST /api/v1/auth/google` rechazará cualquier token con 401.
+
 ## Pruebas
 
 ```bash
-cd backend  && ./mvnw test          # backend
+cd backend  && ./mvnw test          # backend (usa Testcontainers: requiere Docker)
 cd frontend && npx ng test --watch=false   # frontend
 ```
 

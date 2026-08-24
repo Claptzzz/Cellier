@@ -161,11 +161,24 @@
             </path>
           </annotationProcessorPaths>
           <compilerArgs>
-            <arg>-Amapstruct.defaultComponentModel=spring</arg>
-            <arg>-Amapstruct.unmappedTargetPolicy=ERROR</arg>
             <arg>-parameters</arg>
           </compilerArgs>
         </configuration>
+        <executions>
+          <!-- Las opciones de MapStruct solo aplican al codigo principal: es donde viven
+               los @Mapper. Ponerlas tambien en test-compile hacia que javac avisara en
+               cada build de que ningun procesador las reconocia. -->
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <compilerArgs>
+                <arg>-Amapstruct.defaultComponentModel=spring</arg>
+                <arg>-Amapstruct.unmappedTargetPolicy=ERROR</arg>
+                <arg>-parameters</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
