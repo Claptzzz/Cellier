@@ -1,0 +1,41 @@
+# --- Java / Maven ---
+target/
+*.jar
+*.war
+*.class
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# --- Node / Angular ---
+node_modules/
+# Toolchain de Node que instala frontend-maven-plugin en el perfil `frontend`
+backend/.frontend-toolchain/
+dist/
+.angular/
+npm-debug.log*
+yarn-error.log*
+
+# --- Entorno ---
+.env
+.env.local
+*.local
+
+# --- IDEs ---
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.settings/
+.project
+.classpath
+nbproject/private/
+
+# --- SO ---
+.DS_Store
+Thumbs.db
+
+# --- Logs / temporales ---
+*.log
+logs/
+*.pid

@@ -1,0 +1,19 @@
+@use 'tailwindcss';
+
+/* Tokens propios de Cellier. El modo oscuro sigue a `prefers-color-scheme`,
+   que es el comportamiento por defecto de la variante `dark:` en Tailwind v4. */
+@theme {
+  --color-cellier-50: #f2f7f4;
+  --color-cellier-100: #e0ece4;
+  --color-cellier-500: #4b8f6f;
+  --color-cellier-600: #3b7359;
+  --color-cellier-700: #2e5a46;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+}

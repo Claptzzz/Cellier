@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cellier-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-cellier}
+      POSTGRES_USER: ${DB_USER:-cellier}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cellier}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - cellier-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cellier} -d ${DB_NAME:-cellier}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cellier-pgdata:
+    name: cellier-pgdata

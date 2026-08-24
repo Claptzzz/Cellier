@@ -1,0 +1,111 @@
+# ---------------------------------------------------------------------------
+# Configuración común. Sin credenciales: todo llega por variable de entorno.
+# Los valores por defecto existen SOLO en el perfil `dev`.
+# ---------------------------------------------------------------------------
+spring:
+  application:
+    name: cellier
+  profiles:
+    default: dev
+
+  jpa:
+    hibernate:
+      # El esquema lo gobierna Flyway. Hibernate solo valida que coincida.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS:health,info}
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+    display-request-duration: true
+
+---
+# ---------------------------------------------------------------------------
+# dev: valores por defecto pensados para el docker-compose de este repo.
+# ---------------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cellier}
+    username: ${DB_USER:cellier}
+    password: ${DB_PASSWORD:cellier}
+
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: ${JPA_SHOW_SQL:false}
+
+logging:
+  level:
+    com.cellier: ${LOG_LEVEL_CELLIER:DEBUG}
+    org.flywaydb: INFO
+
+springdoc:
+  swagger-ui:
+    enabled: true
+
+---
+# ---------------------------------------------------------------------------
+# prod: sin valores por defecto. Si falta una variable, la app no arranca.
+# ---------------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.cellier: ${LOG_LEVEL_CELLIER:INFO}
+    root: WARN
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_UI_ENABLED:false}
