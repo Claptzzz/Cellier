@@ -23,6 +23,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <springdoc.version>3.1.0</springdoc.version>
+    <spring-dotenv.version>5.1.0</spring-dotenv.version>
     <mapstruct.version>1.6.3</mapstruct.version>
     <frontend-maven-plugin.version>2.0.2</frontend-maven-plugin.version>
 
@@ -63,6 +64,15 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+
+    <!-- Carga el .env de la raiz del repo como PropertySource. Sin esto, Spring
+         no ve el .env (solo lo lee Docker Compose) y cae a los defaults, que es
+         como el backend acababa conectandose a un Postgres equivocado. -->
+    <dependency>
+      <groupId>me.paulschwarz</groupId>
+      <artifactId>spring-dotenv</artifactId>
+      <version>${spring-dotenv.version}</version>
     </dependency>
 
     <!-- Autoconfiguracion de Flyway: en Spring Boot 4 vive en su propio modulo,
@@ -130,6 +140,10 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
+          <!-- Arranca con la raiz del repo como directorio de trabajo, que es donde
+               viven .env y docker-compose.yml. Asi `./mvnw spring-boot:run` desde
+               backend/ y `java -jar` desde la raiz encuentran el mismo .env. -->
+          <workingDirectory>${project.basedir}/..</workingDirectory>
           <excludes>
             <exclude>
               <groupId>org.projectlombok</groupId>

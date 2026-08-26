@@ -1,19 +1,234 @@
+// ===========================================================================
+//  Cellier · tokens de diseño
+// ===========================================================================
+//  Los tokens son SEMÁNTICOS, nunca literales. Ningún componente escribe un
+//  hex ni una clase de color de Tailwind: todos consumen var(--…).
+//
+//  Los valores de color están medidos, no estimados. El ratio anotado en cada
+//  línea es el contraste WCAG contra --surface del mismo tema.
+// ===========================================================================
+
 @use 'tailwindcss';
 
-/* Tokens propios de Cellier. El modo oscuro sigue a `prefers-color-scheme`,
-   que es el comportamiento por defecto de la variante `dark:` en Tailwind v4. */
-@theme {
-  --color-cellier-50: #f2f7f4;
-  --color-cellier-100: #e0ece4;
-  --color-cellier-500: #4b8f6f;
-  --color-cellier-600: #3b7359;
-  --color-cellier-700: #2e5a46;
+// Fuentes variables, self-hosted. Nada de <link> a Google Fonts.
+@use '@fontsource-variable/bricolage-grotesque/index.css' as bricolage;
+@use '@fontsource-variable/geist/index.css' as geist;
+@use '@fontsource-variable/geist-mono/index.css' as geist-mono;
+
+// ---------------------------------------------------------------------------
+//  TEMA CLARO (por defecto)
+// ---------------------------------------------------------------------------
+:root {
+  // -- Superficies --------------------------------------------------------
+  // Gris de porcelana con sesgo frío. NO es crema: la calidez es el default
+  // de IA para cualquier brief de cocina y aquí se evita a propósito.
+  --surface:          #F3F5F6;
+  --surface-raised:   #FBFCFC;
+  --surface-sunken:   #E4E9EC;
+
+  // -- Texto --------------------------------------------------------------
+  --text:             #16202A;   // 15.07:1  AAA
+  --text-muted:       #5A6B78;   //  5.04:1  AA
+
+  // -- Bordes -------------------------------------------------------------
+  // Dos tokens, no uno. WCAG 1.4.11 sólo exige 3:1 al borde que es el ÚNICO
+  // indicador de un control. La hairline decorativa puede (y debe) ser tenue.
+  --border:           #CFD8DE;   //  1.32:1  separadores, divisores
+  --border-strong:    #7E888F;   //  3.31:1  contorno de Input, Select, control
+
+  // -- Acento -------------------------------------------------------------
+  // Azul food-safe. En cocina profesional el azul está reservado al utillaje
+  // en contacto con alimentos, porque casi nada comestible es azul. Aquí marca
+  // la HERRAMIENTA (acción, foco, estado activo) y nunca el CONTENIDO.
+  --accent:           #0A5FBF;   //  5.64:1  AA
+  --accent-contrast:  #FFFFFF;   //  6.17:1  sobre --accent
+  --accent-weak:      #E3EDF9;   //  fondo de estado activo / selección
+
+  // -- Estado -------------------------------------------------------------
+  // Verde, ámbar y rojo están comprometidos por la semántica del inventario.
+  // Por eso el acento de marca NO puede vivir en esta banda.
+  --ok:               #2B7449;   //  5.19:1  AA
+  --warn:             #8A5A00;   //  5.42:1  AA
+  --danger:           #B3372C;   //  5.49:1  AA
+  --ok-weak:          #E1EFE7;
+  --warn-weak:        #F6EBD8;
+  --danger-weak:      #F8E4E1;
+
+  // -- Elevación ----------------------------------------------------------
+  // Modelo de estante, no de flotación: en una despensa nada flota, todo se
+  // apoya. Nivel 1 es un canto duro de 1px, no una sombra ambiental difusa.
+  --shadow-1: 0 1px 0 rgb(22 32 42 / 0.06);
+  --shadow-2: 0 8px 24px -8px rgb(22 32 42 / 0.18);
+
+  color-scheme: light;
 }
 
+// ---------------------------------------------------------------------------
+//  TEMA OSCURO
+// ---------------------------------------------------------------------------
+//  Se aplica por clase .dark en <html>, no por media query, porque el usuario
+//  puede forzar un modo. El seguimiento de prefers-color-scheme lo hace
+//  ThemeService cuando el modo es 'system'.
+// ---------------------------------------------------------------------------
+.dark {
+  --surface:          #10161B;
+  --surface-raised:   #182128;
+  --surface-sunken:   #0A0F13;
+
+  --text:             #E4EBF0;   // 15.13:1  AAA
+  --text-muted:       #94A6B3;   //  7.26:1  AAA
+
+  --border:           #26333C;   //  1.41:1  separadores
+  --border-strong:    #617079;   //  3.56:1  contorno de control
+
+  --accent:           #6BB0F5;   //  7.94:1  AAA
+  --accent-contrast:  #06121F;   //  8.22:1  sobre --accent
+  --accent-weak:      #15293C;
+
+  --ok:               #5FBE84;   //  7.97:1  AAA
+  --warn:             #E0A33A;   //  8.22:1  AAA
+  --danger:           #F0796B;   //  6.64:1  AA
+  --ok-weak:          #142C1F;
+  --warn-weak:        #2E2410;
+  --danger-weak:      #331917;
+
+  // En oscuro la sombra no se lee. La elevación se expresa subiendo un escalón
+  // de superficie y aclarando el borde, no apilando sombras invisibles.
+  --shadow-1: none;
+  --shadow-2: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+
+  color-scheme: dark;
+}
+
+// ---------------------------------------------------------------------------
+//  Puente a Tailwind v4
+// ---------------------------------------------------------------------------
+//  Cada token semántico se expone como utilidad: bg-surface, text-muted,
+//  border-strong, ring-accent… Un componente jamás escribe bg-slate-800.
+// ---------------------------------------------------------------------------
+@theme inline {
+  --color-surface:          var(--surface);
+  --color-surface-raised:   var(--surface-raised);
+  --color-surface-sunken:   var(--surface-sunken);
+  --color-text:             var(--text);
+  --color-text-muted:       var(--text-muted);
+  --color-border:           var(--border);
+  --color-border-strong:    var(--border-strong);
+  --color-accent:           var(--accent);
+  --color-accent-contrast:  var(--accent-contrast);
+  --color-accent-weak:      var(--accent-weak);
+  --color-ok:               var(--ok);
+  --color-ok-weak:          var(--ok-weak);
+  --color-warn:             var(--warn);
+  --color-warn-weak:        var(--warn-weak);
+  --color-danger:           var(--danger);
+  --color-danger-weak:      var(--danger-weak);
+
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'Geist Mono Variable', ui-monospace, monospace;
+
+  // Radios pequeños a propósito: la referencia es la esquina de una etiqueta de
+  // conserva (~2 mm sobre 60 mm), no la de una tarjeta de iOS.
+  --radius-sm:   6px;   // Input, Select, Badge, IconButton
+  --radius-md:  10px;   // Button, QuantityStepper, fila de inventario
+  --radius-lg:  16px;   // Card, Dialog, BottomSheet
+
+  --shadow-e1: var(--shadow-1);
+  --shadow-e2: var(--shadow-2);
+}
+
+// ---------------------------------------------------------------------------
+//  Escalas
+// ---------------------------------------------------------------------------
+:root {
+  // Espaciado base 4px, sin valores intermedios.
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  // Tipografía. El cuerpo base es 15px, no 16: la fila de inventario lleva dos
+  // líneas y a 16px la secundaria empuja la fila por encima de 72px en 375.
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-md:   17px;
+  --text-lg:   20px;
+  --text-xl:   24px;
+  --text-2xl:  32px;
+  --text-3xl:  40px;
+
+  // ⚠️ REGLA QUE NO SE PUEDE PERDER ⚠️
+  // Safari en iOS hace auto-zoom al enfocar CUALQUIER campo con font-size < 16px.
+  // Input, Select y el campo numérico editable de QuantityStepper usan este token
+  // SIN EXCEPCIÓN, aunque el cuerpo de la app sea 15px. No lo bajes a
+  // var(--text-base) "por consistencia": rompe el layout en iPhone.
+  --text-control: 16px;
+
+  // Área táctil mínima. WCAG 2.5.8 pide 24px; 44px es el mínimo cómodo para
+  // uso a una mano y es lo que aplicamos a toda la navegación.
+  --touch-min: 44px;
+
+  --header-h: 56px;
+  --bottom-nav-h: 64px;
+  --sidebar-w: 260px;
+}
+
+// ---------------------------------------------------------------------------
+//  Base
+// ---------------------------------------------------------------------------
 html {
-  color-scheme: light dark;
+  background-color: var(--surface);
+  // Evita el retardo de 300ms por doble toque en móvil.
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  background-color: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+// Las cifras se comparan en columna: siempre tabulares, en toda la app.
+table, .tabular, output, [data-numeric] {
+  font-variant-numeric: tabular-nums;
+}
+
+// Foco visible por teclado en todo lo enfocable. Nunca outline:none sin
+// reemplazo. :focus-visible y no :focus, para no marcar el clic de ratón.
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--accent-weak);
+  color: var(--text);
+}
+
+// ---------------------------------------------------------------------------
+//  Movimiento reducido
+// ---------------------------------------------------------------------------
+//  Global y sin excepciones. Cualquier componente que anime hereda esto.
+// ---------------------------------------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

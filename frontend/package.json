@@ -6,7 +6,12 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "sync-env": "node scripts/sync-environment.mjs",
+    "prestart": "node scripts/sync-environment.mjs",
+    "prebuild": "node scripts/sync-environment.mjs && node scripts/sync-environment.mjs --prod",
+    "pretest": "node scripts/sync-environment.mjs",
+    "prewatch": "node scripts/sync-environment.mjs"
   },
   "private": true,
   "packageManager": "npm@12.0.2",
@@ -17,6 +22,9 @@
     "@angular/forms": "^22.1.0",
     "@angular/platform-browser": "^22.1.0",
     "@angular/router": "^22.1.0",
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -24,7 +32,8 @@
     "@angular/build": "^22.1.5",
     "@angular/cli": "^22.1.5",
     "@angular/compiler-cli": "^22.1.0",
-    "@playwright/test": "^1.62.1",
+    "@phosphor-icons/core": "2.1.1",
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "jsdom": "^28.0.0",
     "postcss": "^8.5.26",

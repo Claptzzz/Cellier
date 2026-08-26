@@ -8,7 +8,10 @@ services:
       POSTGRES_USER: ${DB_USER:-cellier}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-cellier}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # 5433 en el host a proposito: 5432 suele estar ocupado por un PostgreSQL
+      # instalado en el sistema, y el choque se manifiesta como un error de
+      # credenciales confuso en vez de como un conflicto de puertos.
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - cellier-pgdata:/var/lib/postgresql/data
     healthcheck:

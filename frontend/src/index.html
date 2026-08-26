@@ -4,10 +4,36 @@
   <meta charset="utf-8">
   <title>Cellier</title>
   <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Cellier — la despensa compartida de tu hogar.">
+  <meta name="description" content="Cellier, la despensa compartida de tu hogar.">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!--
+    Anti-destello. Corre ANTES del primer paint y antes de que Angular arranque:
+    si se aplicara la clase desde el ThemeService, el navegador ya habría pintado
+    un frame en claro y al recargar en oscuro se vería un flash blanco.
+
+    Debe quedarse inline en el <head>. Moverlo a un archivo externo lo convierte
+    en una petición y reintroduce el destello.
+    Mantener sincronizado con CELLIER_THEME_STORAGE_KEY en theme.service.ts.
+  -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('cellier.theme');
+        var mode = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+        var dark = mode === 'dark'
+          || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var root = document.documentElement;
+        root.classList.toggle('dark', dark);
+        root.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) {
+        // localStorage bloqueado (modo privado, cookies desactivadas). Se cae a
+        // claro, que es el default de :root. No debe romper el arranque.
+      }
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>
