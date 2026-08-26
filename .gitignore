@@ -17,6 +17,10 @@ yarn-error.log*
 
 # --- Entorno ---
 .env
+# Generados por frontend/scripts/sync-environment.mjs desde el .env de la raiz.
+# Llevan el client id real de Google, asi que no se versionan.
+frontend/src/environments/environment.development.ts
+frontend/src/environments/environment.prod.ts
 .env.local
 *.local
 

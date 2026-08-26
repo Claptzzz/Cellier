@@ -44,6 +44,15 @@ management:
       probes:
         enabled: true
 
+# spring-dotenv: carga el .env del directorio de trabajo (la raiz del repo) como
+# PropertySource. Se ignora si no existe, para que un despliegue que use variables
+# de entorno reales, o los tests, arranquen igual sin el archivo.
+springdotenv:
+  directory: ./
+  filename: .env
+  ignore-if-missing: true
+  ignore-if-malformed: false
+
 cellier:
   auth:
     google:
@@ -83,7 +92,7 @@ spring:
       on-profile: dev
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cellier}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:cellier}
     username: ${DB_USER:cellier}
     password: ${DB_PASSWORD:cellier}
 
