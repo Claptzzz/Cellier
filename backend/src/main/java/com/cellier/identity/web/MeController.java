@@ -35,7 +35,15 @@ public class MeController {
               "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocK",
               "locale": "es-CL",
               "themePreference": "SYSTEM",
-              "createdAt": "2026-08-24T20:15:30Z"
+              "createdAt": "2026-08-24T20:15:30Z",
+              "households": [
+                {
+                  "id": "8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98",
+                  "name": "Casa Rivas",
+                  "role": "ADMIN",
+                  "memberCount": 3
+                }
+              ]
             }""";
 
     private static final String EXAMPLE_PROFILE_UPDATED = """
@@ -46,7 +54,15 @@ public class MeController {
               "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocK",
               "locale": "es-CL",
               "themePreference": "DARK",
-              "createdAt": "2026-08-24T20:15:30Z"
+              "createdAt": "2026-08-24T20:15:30Z",
+              "households": [
+                {
+                  "id": "8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98",
+                  "name": "Casa Rivas",
+                  "role": "ADMIN",
+                  "memberCount": 3
+                }
+              ]
             }""";
 
     private static final String EXAMPLE_UNAUTHORIZED = """
@@ -76,7 +92,13 @@ public class MeController {
 
     @Operation(
             summary = "Obtener el perfil propio",
-            description = "Devuelve el perfil del usuario que acredita el access token.")
+            description = """
+                    Devuelve el perfil del usuario que acredita el access token, junto con los
+                    hogares a los que pertenece y su rol en cada uno.
+
+                    La lista de hogares se relee en cada respuesta: una lista vacía significa
+                    que el usuario aún no pertenece a ninguno.
+                    """)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Perfil del usuario autenticado.",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,

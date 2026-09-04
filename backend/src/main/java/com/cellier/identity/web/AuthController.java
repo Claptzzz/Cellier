@@ -44,7 +44,15 @@ public class AuthController {
                 "avatarUrl": "https://lh3.googleusercontent.com/a/ACg8ocK",
                 "locale": "es-CL",
                 "themePreference": "SYSTEM",
-                "createdAt": "2026-08-24T20:15:30Z"
+                "createdAt": "2026-08-24T20:15:30Z",
+                "households": [
+                  {
+                    "id": "8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98",
+                    "name": "Casa Rivas",
+                    "role": "ADMIN",
+                    "memberCount": 3
+                  }
+                ]
               }
             }""";
 
@@ -91,6 +99,10 @@ public class AuthController {
                     El usuario se identifica por el claim `sub` de Google: si ya existe se le
                     actualizan nombre, avatar y correo; si no, se crea la cuenta.
 
+                    La respuesta incluye los hogares del usuario, de modo que el cliente puede
+                    decidir a dónde llevarlo —a un hogar o a la pantalla de bienvenida— sin una
+                    segunda llamada.
+
                     Endpoint público: no requiere `Authorization`.
                     """,
             security = {})
@@ -119,6 +131,10 @@ public class AuthController {
             summary = "Renovar el par de tokens",
             description = """
                     Canjea un refresh token vigente por un par nuevo.
+
+                    Los hogares que devuelve se releen de la base de datos, no se copian de la
+                    respuesta del inicio de sesión: es así como una sesión abierta descubre que
+                    a su usuario lo expulsaron de un hogar o lo ascendieron a administrador.
 
                     **Los refresh token rotan**: el que se presenta queda revocado en la misma
                     operación. Reutilizar uno ya gastado devuelve 401 y, por precaución, revoca

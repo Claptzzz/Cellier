@@ -8,6 +8,7 @@ import com.cellier.household.dto.HouseholdSummaryResponse;
 import com.cellier.household.dto.JoinCodeResponse;
 import com.cellier.household.dto.UpdateHouseholdRequest;
 import com.cellier.identity.CurrentUserService;
+import com.cellier.identity.UserHouseholdsView;
 import com.cellier.identity.domain.User;
 import com.cellier.shared.error.NotFoundException;
 import org.slf4j.Logger;
@@ -18,9 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
-/** Casos de uso sobre el hogar como tal. La membresía se gobierna en sus propios servicios. */
+/**
+ * Casos de uso sobre el hogar como tal. La membresía se gobierna en sus propios servicios.
+ *
+ * <p>Implementa además {@link UserHouseholdsView}, el puerto por el que el perfil de usuario
+ * obtiene sus hogares sin que {@code identity} tenga que conocer este módulo.
+ */
 @Service
-public class HouseholdService {
+public class HouseholdService implements UserHouseholdsView {
 
     private static final Logger log = LoggerFactory.getLogger(HouseholdService.class);
 
@@ -52,7 +58,20 @@ public class HouseholdService {
     /** Los hogares a los que pertenece el usuario autenticado. */
     @Transactional(readOnly = true)
     public List<HouseholdSummaryResponse> listMine() {
-        return members.findSummariesByUserId(currentUserId());
+        return householdsOf(currentUserId());
+    }
+
+    /**
+     * Los hogares de un usuario cualquiera, para {@link UserHouseholdsView}.
+     *
+     * <p>No comprueba nada por su cuenta, y no lo necesita: solo devuelve los hogares del
+     * usuario que se le indica, y quien la llama es el perfil, que ya ha acreditado ser ese
+     * usuario. Nunca recibe un identificador que venga de la petición.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<HouseholdSummaryResponse> householdsOf(UUID userId) {
+        return members.findSummariesByUserId(userId);
     }
 
     /**

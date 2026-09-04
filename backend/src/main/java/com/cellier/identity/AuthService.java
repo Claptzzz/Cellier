@@ -22,17 +22,20 @@ public class AuthService {
     private final CurrentUserService currentUserService;
     private final UserRepository users;
     private final UserMapper userMapper;
+    private final UserHouseholdsView userHouseholds;
 
     public AuthService(GoogleTokenVerifier googleTokenVerifier,
                        TokenService tokenService,
                        CurrentUserService currentUserService,
                        UserRepository users,
-                       UserMapper userMapper) {
+                       UserMapper userMapper,
+                       UserHouseholdsView userHouseholds) {
         this.googleTokenVerifier = googleTokenVerifier;
         this.tokenService = tokenService;
         this.currentUserService = currentUserService;
         this.users = users;
         this.userMapper = userMapper;
+        this.userHouseholds = userHouseholds;
     }
 
     /**
@@ -61,14 +64,14 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public UserProfileResponse currentProfile() {
-        return userMapper.toProfile(currentUserService.requireCurrentUser());
+        return profileOf(currentUserService.requireCurrentUser());
     }
 
     @Transactional
     public UserProfileResponse updateCurrentProfile(UpdateProfileRequest request) {
         User user = currentUserService.requireCurrentUser();
         user.updateProfile(request.displayName(), request.themePreference(), request.locale());
-        return userMapper.toProfile(user);
+        return profileOf(user);
     }
 
     private User upsert(GoogleIdentity identity) {
@@ -100,6 +103,20 @@ public class AuthService {
                 tokens.accessToken(),
                 tokens.refreshToken(),
                 tokens.expiresIn(),
-                userMapper.toProfile(tokens.user()));
+                profileOf(tokens.user()));
+    }
+
+    /**
+     * Compone el perfil leyendo los hogares de la base <strong>en cada respuesta</strong>,
+     * también al renovar tokens.
+     *
+     * <p>No es una copia de lo que se emitió al iniciar sesión, y no debe llegar a serlo: es el
+     * mecanismo por el que un cliente con la sesión abierta descubre que lo expulsaron de un
+     * hogar o que lo ascendieron a administrador. El rol no viaja dentro del access token
+     * justamente para que no pueda quedarse obsoleto; cachearlo aquí reintroduciría el mismo
+     * problema por la puerta de atrás.
+     */
+    private UserProfileResponse profileOf(User user) {
+        return userMapper.toProfile(user, userHouseholds.householdsOf(user.getId()));
     }
 }
