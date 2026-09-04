@@ -15,17 +15,39 @@ public interface HouseholdRepository extends JpaRepository<Household, UUID> {
 
     boolean existsByJoinCode(String joinCode);
 
+    /** Resuelve el código que teclea quien quiere entrar. Llega ya normalizado a mayúsculas. */
+    Optional<Household> findByJoinCode(String joinCode);
+
     /**
      * Toma la fila del hogar en exclusiva para serializar los cambios de membresía.
      *
-     * <p>Sin esto, la comprobación de R4 tiene una carrera: dos administradores que se
-     * degradan a la vez leerían ambos «quedan 2 administradores», ambos pasarían la
-     * comprobación y el hogar acabaría con cero. La condición no es sobre la fila que se
-     * escribe, sino sobre el conjunto de miembros, así que ningún bloqueo optimista de la
-     * membresía la cubriría; hace falta un punto de serialización común, y el hogar lo es.
+     * <p><strong>No quites esta llamada.</strong> Parece prescindible —el método no lee nada
+     * del hogar, solo lo bloquea— y no lo es.
      *
-     * <p>El coste es despreciable: los cambios de membresía son raros y el bloqueo solo
-     * excluye a otros cambios de membresía <em>del mismo hogar</em>.
+     * <p><b>Qué protege.</b> R4: el hogar conserva siempre al menos un administrador. Sin el
+     * bloqueo hay una carrera real: dos administradores que se quitan el rol a la vez leen
+     * ambos «quedan 2», ambos pasan la comprobación, y el hogar acaba con cero. A partir de
+     * ahí nadie puede administrarlo, aprobar solicitudes ni borrarlo: el hogar queda
+     * congelado con sus miembros dentro y sin salida.
+     *
+     * <p><b>Por qué se bloquea el hogar y no la membresía.</b> Porque R4 no es una condición
+     * sobre la fila que se escribe, sino sobre el <em>conjunto</em> de miembros. Los dos
+     * administradores del ejemplo modifican filas <em>distintas</em>: no colisionan, así que
+     * ni un bloqueo optimista con {@code @Version} sobre {@code HouseholdMember} ni un
+     * {@code FOR UPDATE} sobre esas filas detectarían nada. Hace falta un punto de
+     * serialización común a todas las membresías del hogar, y la fila del hogar es el único
+     * que existe sin inventar un candado artificial.
+     *
+     * <p><b>Cómo se comprueba.</b>
+     * {@code HouseholdMembershipIntegrationTest.degradacionesSimultaneasNoVacianElHogar}
+     * ejecuta el escenario con dos hilos y transacciones distintas, repetido 25 veces. Si se
+     * retira este bloqueo, falla con «el hogar se quedó sin administrador ([ok, ok])». Las
+     * repeticiones no son decorativas: con una sola tirada el test pasaba igual sin bloqueo,
+     * porque la ventana entre contar administradores y confirmar dura microsegundos.
+     *
+     * <p><b>Qué cuesta.</b> Nada apreciable. Los cambios de membresía son raros y el bloqueo
+     * solo excluye a otros cambios de membresía <em>del mismo hogar</em>: no toca lecturas ni
+     * a los demás hogares.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select h from Household h where h.id = :householdId")

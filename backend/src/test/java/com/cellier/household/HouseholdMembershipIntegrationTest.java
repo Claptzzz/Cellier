@@ -87,6 +87,9 @@ class HouseholdMembershipIntegrationTest {
     private HouseholdMemberRepository members;
 
     @Autowired
+    private JoinRequestRepository joinRequests;
+
+    @Autowired
     private HouseholdMembershipService membership;
 
     @Autowired
@@ -113,6 +116,7 @@ class HouseholdMembershipIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        joinRequests.deleteAll();
         members.deleteAll();
         households.deleteAll();
         refreshTokens.deleteAll();
@@ -143,7 +147,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("cualquier miembro puede listar, y los administradores salen primero")
         void listadoOrdenadoConAdministradoresPrimero() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             mockMvc.perform(get(rutaMiembros()).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenBruno))
                     .andExpect(status().isOk())
@@ -167,8 +171,8 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("listar cuesta una sola sentencia, sean cuantos sean los miembros")
         void listarNoEsUnNMasUno() throws Exception {
-            hacerMiembro(hogar, idBruno);
-            hacerMiembro(hogar, idCarla);
+            hacerMiembro(tokenBruno);
+            hacerMiembro(tokenCarla);
 
             Statistics estadisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
             estadisticas.clear();
@@ -193,7 +197,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("la única administradora no puede quitarse el rol: 409")
         void degradarAlUltimoAdminDa409() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             cambiarRol(tokenAna, idAna, "MEMBER")
                     .andExpect(status().isConflict())
@@ -209,7 +213,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("la única administradora no puede salirse: 409, y sigue dentro")
         void salirSiendoElUltimoAdminDa409() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             mockMvc.perform(delete(rutaMiembro(idAna)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna))
                     .andExpect(status().isConflict())
@@ -223,7 +227,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("con dos administradores, uno sí puede quitarse el rol; el que queda ya no")
         void conDosAdministradoresUnoPuedeDegradarse() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
             cambiarRol(tokenAna, idBruno, "ADMIN").andExpect(status().isOk());
 
             cambiarRol(tokenAna, idAna, "MEMBER")
@@ -238,7 +242,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("con dos administradores, uno puede expulsar al otro")
         void conDosAdministradoresUnoPuedeExpulsarAlOtro() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
             cambiarRol(tokenAna, idBruno, "ADMIN").andExpect(status().isOk());
 
             mockMvc.perform(delete(rutaMiembro(idBruno)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna))
@@ -292,7 +296,15 @@ class HouseholdMembershipIntegrationTest {
             }
         }
 
-        /** Deja el hogar con Ana y Bruno como administradores, venga del estado que venga. */
+        /**
+         * Deja el hogar con Ana y Bruno como administradores, venga del estado que venga.
+         *
+         * <p>Aquí sí se escriben las filas directamente, y no es el atajo que el resto de los
+         * tests evita: no monta un estado inalcanzable —dos administradores se consiguen
+         * promoviendo por la API— sino que lo restablece 25 veces seguidas dentro del bucle de
+         * la carrera. Reconstruirlo por HTTP en cada ronda añadiría cinco peticiones por vuelta
+         * al único test que mide una ventana de microsegundos.
+         */
         private void dejarDosAdministradores() {
             members.deleteAll();
             Household household = households.findById(hogar).orElseThrow();
@@ -328,7 +340,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un miembro se sale solo y deja de ver el hogar")
         void elMiembroSeSaleSolo() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             mockMvc.perform(delete(rutaMiembro(idBruno)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenBruno))
                     .andExpect(status().isNoContent());
@@ -343,7 +355,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un administrador se sale solo si deja otro administrador detrás")
         void elAdministradorSeSaleSiQuedaOtro() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
             cambiarRol(tokenAna, idBruno, "ADMIN").andExpect(status().isOk());
 
             mockMvc.perform(delete(rutaMiembro(idAna)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna))
@@ -356,7 +368,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("salirse borra la membresía, no el hogar ni al resto")
         void salirseNoBorraElHogar() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             mockMvc.perform(delete(rutaMiembro(idBruno)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenBruno))
                     .andExpect(status().isNoContent());
@@ -377,7 +389,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un MEMBER no cambia roles ajenos: 403")
         void miembroNoCambiaRoles() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             cambiarRol(tokenBruno, idAna, "MEMBER")
                     .andExpect(status().isForbidden())
@@ -390,7 +402,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un MEMBER tampoco se promueve a sí mismo: 403")
         void miembroNoSeAutopromociona() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             cambiarRol(tokenBruno, idBruno, "ADMIN").andExpect(status().isForbidden());
 
@@ -400,8 +412,8 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un MEMBER no expulsa a nadie: 403, aunque el hogar sí exista para él")
         void miembroNoExpulsa() throws Exception {
-            hacerMiembro(hogar, idBruno);
-            hacerMiembro(hogar, idCarla);
+            hacerMiembro(tokenBruno);
+            hacerMiembro(tokenCarla);
 
             mockMvc.perform(delete(rutaMiembro(idCarla)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenBruno))
                     .andExpect(status().isForbidden());
@@ -412,7 +424,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un administrador expulsa a un miembro: 204")
         void elAdministradorExpulsa() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             mockMvc.perform(delete(rutaMiembro(idBruno)).header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna))
                     .andExpect(status().isNoContent());
@@ -468,7 +480,7 @@ class HouseholdMembershipIntegrationTest {
         @Test
         @DisplayName("un rol ausente o desconocido responde 400")
         void rolInvalidoDa400() throws Exception {
-            hacerMiembro(hogar, idBruno);
+            hacerMiembro(tokenBruno);
 
             mockMvc.perform(patch(rutaMiembro(idBruno))
                             .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna)
@@ -552,15 +564,29 @@ class HouseholdMembershipIntegrationTest {
     }
 
     /**
-     * Mete a alguien en el hogar como MEMBER escribiendo la fila.
-     *
-     * <p>Sigue siendo un atajo consciente: la vía de la API para llegar a MEMBER es la
-     * aprobación de una solicitud de ingreso, que aún no existe.
+     * Mete a alguien en el hogar por el camino real: solicita con el código y Ana, que lo
+     * administra, aprueba. El estado de partida es uno al que se llega por la API.
      */
-    private void hacerMiembro(UUID householdId, UUID userId) {
-        Household household = households.findById(householdId).orElseThrow();
-        User user = users.findById(userId).orElseThrow();
-        members.save(HouseholdMember.member(household, user));
+    private void hacerMiembro(String tokenNuevo) throws Exception {
+        String codigo = json(mockMvc.perform(get("/api/v1/households/" + hogar)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna))
+                        .andExpect(status().isOk()))
+                .get("joinCode").asText();
+
+        String solicitud = json(mockMvc.perform(post("/api/v1/join-requests")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenNuevo)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("joinCode", codigo))))
+                        .andExpect(status().isCreated()))
+                .get("id").asText();
+
+        mockMvc.perform(post("/api/v1/households/" + hogar + "/join-requests/" + solicitud + ":approve")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAna))
+                .andExpect(status().isOk());
+    }
+
+    private JsonNode json(ResultActions actions) throws Exception {
+        return objectMapper.readTree(actions.andReturn().getResponse().getContentAsString());
     }
 
     /** Coloca la identidad en el SecurityContext del hilo actual, como haría el filtro JWT. */

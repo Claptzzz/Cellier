@@ -1,13 +1,10 @@
 package com.cellier.household;
 
 import com.cellier.PostgresTestcontainerConfig;
-import com.cellier.household.domain.Household;
-import com.cellier.household.domain.HouseholdMember;
 import com.cellier.identity.GoogleIdentity;
 import com.cellier.identity.GoogleTokenVerifier;
 import com.cellier.identity.RefreshTokenRepository;
 import com.cellier.identity.UserRepository;
-import com.cellier.identity.domain.User;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -80,6 +77,9 @@ class HouseholdIntegrationTest {
     private HouseholdMemberRepository members;
 
     @Autowired
+    private JoinRequestRepository joinRequests;
+
+    @Autowired
     private EntityManagerFactory entityManagerFactory;
 
     @MockitoBean
@@ -93,6 +93,7 @@ class HouseholdIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        joinRequests.deleteAll();
         members.deleteAll();
         households.deleteAll();
         refreshTokens.deleteAll();
@@ -260,7 +261,7 @@ class HouseholdIntegrationTest {
         @DisplayName("un administrador borra el hogar y sus membresías caen en cascada")
         void borrarArrastraLasMembresias() throws Exception {
             UUID id = idDe(crear(ana, "Casa Rivas"));
-            hacerMiembro(id, "bruno.soto@gmail.com");
+            hacerMiembro(id, ana, bruno);
             assertThat(members.count()).isEqualTo(2);
 
             mockMvc.perform(delete("/api/v1/households/" + id)
@@ -289,7 +290,7 @@ class HouseholdIntegrationTest {
         @DisplayName("un miembro sin rol de administrador no puede borrarlo")
         void unMiembroNoPuedeBorrarlo() throws Exception {
             UUID id = idDe(crear(ana, "Casa Rivas"));
-            hacerMiembro(id, "bruno.soto@gmail.com");
+            hacerMiembro(id, ana, bruno);
 
             mockMvc.perform(delete("/api/v1/households/" + id)
                             .header(HttpHeaders.AUTHORIZATION, "Bearer " + bruno))
@@ -390,7 +391,7 @@ class HouseholdIntegrationTest {
         @BeforeEach
         void brunoEsMiembro() throws Exception {
             hogar = idDe(crear(ana, "Casa Rivas"));
-            hacerMiembro(hogar, "bruno.soto@gmail.com");
+            hacerMiembro(hogar, ana, bruno);
         }
 
         @Test
@@ -523,19 +524,26 @@ class HouseholdIntegrationTest {
     }
 
     /**
-     * Añade a alguien como MEMBER escribiendo la fila directamente.
-     *
-     * <p>Es una excepción consciente a probar por HTTP: la única vía de la API para llegar a
-     * MEMBER es que un administrador apruebe una solicitud de ingreso, y ese camino aún no
-     * existe. Cuando exista, estos casos podrán montarse con la API y este atajo sobrará.
+     * Mete a alguien en el hogar por el camino real: pide el código, solicita el ingreso y el
+     * administrador lo aprueba. Nada de escribir la fila a mano; el estado de partida de estos
+     * tests es uno al que un usuario puede llegar de verdad.
      */
-    private void hacerMiembro(UUID householdId, String email) {
-        Household household = households.findById(householdId).orElseThrow();
-        User user = users.findAll().stream()
-                .filter(candidato -> candidato.getEmail().equalsIgnoreCase(email))
-                .findFirst()
-                .orElseThrow();
-        members.save(HouseholdMember.member(household, user));
+    private void hacerMiembro(UUID householdId, String tokenAdmin, String tokenNuevo) throws Exception {
+        String codigo = json(mockMvc.perform(get("/api/v1/households/" + householdId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAdmin))
+                        .andExpect(status().isOk()))
+                .get("joinCode").asText();
+
+        String solicitud = json(mockMvc.perform(post("/api/v1/join-requests")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenNuevo)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("joinCode", codigo))))
+                        .andExpect(status().isCreated()))
+                .get("id").asText();
+
+        mockMvc.perform(post("/api/v1/households/" + householdId + "/join-requests/" + solicitud + ":approve")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAdmin))
+                .andExpect(status().isOk());
     }
 
     private JsonNode json(ResultActions actions) throws Exception {
