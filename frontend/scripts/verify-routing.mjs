@@ -36,6 +36,12 @@ async function visita({ path, profile, lastHousehold, misSolicitudes = [] }) {
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profile) }));
   await page.route('**/api/v1/join-requests/mine', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(misSolicitudes) }));
+  // La bandeja del hogar activo: el chasis la pide para el distintivo de pendientes. Sin
+  // simularla la peticion sale al backend real, vuelve 401, el interceptor intenta
+  // refrescar con un token de mentira y acaba cerrando la sesion: todos los casos
+  // terminaban en /login.
+  await page.route('**/households/*/join-requests**', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.addInitScript(([last]) => {
     localStorage.setItem('cellier.refreshToken', 'shot-token');
     if (last) localStorage.setItem('cellier.lastHouseholdId', last);

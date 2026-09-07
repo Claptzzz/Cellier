@@ -33,16 +33,27 @@ import {
   styles: `
     :host { display: contents; }
 
+    /*
+      SIN position: fixed. Un <dialog> abierto con showModal() vive en el top layer, y
+      ahi su bloque contenedor es el viewport. Al forzar position:fixed volvia a buscar bloque
+      contenedor entre sus ancestros, y cualquiera con transform, filter o
+      backdrop-filter se lo daba: dentro de la cabecera del chasis —que lleva
+      backdrop-blur— la hoja se resolvia contra un elemento de 8px de alto y su panel
+      terminaba en y = -266, fuera de la pantalla por arriba. El fondo atenuado si se
+      pintaba, asi que parecia abierta y no se veia.
+
+      Medido, no supuesto: la sonda esta en la seccion 4 de
+      docs/frontend-orden-de-ejecucion.md.
+    */
     .ui-sheet {
       padding: 0;
       border: 0;
       background: transparent;
+      margin: 0;
       width: 100vw;
       max-width: 100vw;
+      height: 100dvh;
       max-height: 100dvh;
-      margin: 0;
-      position: fixed;
-      inset: 0;
     }
 
     .ui-sheet::backdrop { background: rgb(6 12 18 / 0.55); }

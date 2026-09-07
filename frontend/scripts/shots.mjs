@@ -233,6 +233,69 @@ const ONBOARDING = [
   },
 ];
 
+// ---- Selector de hogar y distintivo de pendientes ----
+const CON_PENDIENTES = [
+  { id: 'r1', userId: 'u9', displayName: 'Camila Soto', email: 'camila@example.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z',
+    resolvedAt: null, resolvedByUserId: null },
+  { id: 'r2', userId: 'u8', displayName: 'Diego Paz', email: 'diego@example.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-05T18:02:00Z',
+    resolvedAt: null, resolvedByUserId: null },
+];
+
+for (const abierto of [false, true]) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(PROFILE));
+      await page.route('**/join-requests**', json(CON_PENDIENTES));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
+      await page.waitForTimeout(900);
+      if (abierto) {
+        // El chasis monta DOS selectores (barra lateral y cabecera) y oculta uno por CSS
+        // segun el ancho. Se comprueba que solo uno sea visible: si los dos lo fueran,
+        // habria dos disparadores del mismo control en la misma pantalla.
+        const disparadores = page.getByRole('button', { name: /Hogar activo/ });
+        const visibles = await disparadores.evaluateAll(
+          (nodos) => nodos.filter((n) => n.checkVisibility()).length);
+        if (visibles !== 1) {
+          throw new Error(`Se esperaba 1 selector visible en ${label}px, hay ${visibles}`);
+        }
+
+        await disparadores.filter({ visible: true }).click();
+        await page.waitForTimeout(600);
+
+        // Comprobacion explicita en vez de esperar por un selector: el chasis monta los
+        // dos contenedores y solo uno se muestra, asi que lo que importa es que haya
+        // exactamente UN panel visible, no que exista alguno.
+        const panelesVisibles = await page.evaluate(() =>
+          [...document.querySelectorAll('.ui-menu-panel, dialog.ui-sheet')]
+            .filter((n) => n.checkVisibility()).length);
+        if (panelesVisibles !== 1) {
+          throw new Error(`Se esperaba 1 panel visible en ${label}px, hay ${panelesVisibles}`);
+        }
+      }
+
+      const name = `switcher-${abierto ? 'open' : 'closed'}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
 for (const target of ONBOARDING) {
   for (const [label, vp] of Object.entries(VIEWPORTS)) {
     for (const theme of THEMES) {

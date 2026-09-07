@@ -4,6 +4,7 @@ import { filter } from 'rxjs';
 
 import { AuthService } from '../core/auth/auth.service';
 import { HouseholdContextService } from '../core/household/household-context.service';
+import { PendingApprovalsService } from '../core/household/pending-approvals.service';
 import { Icon } from '../shared/ui/icon';
 import { HouseholdSwitcher } from './household-switcher';
 import { NAV_DESTINATIONS, SETTINGS_DESTINATION } from './nav';
@@ -44,8 +45,10 @@ import { ThemeToggle } from './theme-toggle';
 
         <div class="px-3 pb-3">
           <app-household-switcher
-            [name]="householdName()"
-            [memberCount]="householdMemberCount()" />
+            [households]="households()"
+            [activeId]="activeHouseholdId()"
+            (selected)="switchHousehold($event)"
+            (joinAnother)="goToOnboarding()" />
         </div>
 
         <nav class="flex-1 px-2" aria-label="Secciones">
@@ -59,7 +62,12 @@ import { ThemeToggle } from './theme-toggle';
                   #rla="routerLinkActive"
                   [attr.aria-current]="rla.isActive ? 'page' : null">
                   <ui-icon [name]="item.icon" [size]="20" />
-                  <span>{{ item.label }}</span>
+                  <span class="flex-1">{{ item.label }}</span>
+                  @if (item.segment === 'home' && pendingApprovals() !== null) {
+                    <span class="nav-count" [attr.aria-label]="pendingLabel()">
+                      {{ pendingApprovals() }}
+                    </span>
+                  }
                 </a>
               </li>
             }
@@ -89,7 +97,12 @@ import { ThemeToggle } from './theme-toggle';
 
           <!-- El selector de hogar sólo aparece en el header cuando no hay sidebar -->
           <div class="min-w-0 flex-1 overflow-hidden lg:hidden">
-            <app-household-switcher [name]="householdName()" [compact]="true" />
+            <app-household-switcher
+              [households]="households()"
+              [activeId]="activeHouseholdId()"
+              [compact]="true"
+              (selected)="switchHousehold($event)"
+              (joinAnother)="goToOnboarding()" />
           </div>
 
           <!-- En desktop el hogar ya está en el selector del sidebar. Repetirlo aquí
@@ -140,7 +153,14 @@ import { ThemeToggle } from './theme-toggle';
                 class="tab-link"
                 #tab="routerLinkActive"
                 [attr.aria-current]="tab.isActive ? 'page' : null">
-                <ui-icon [name]="item.icon" [size]="22" />
+                <span class="relative">
+                  <ui-icon [name]="item.icon" [size]="22" />
+                  @if (item.segment === 'home' && pendingApprovals() !== null) {
+                    <span class="tab-count" [attr.aria-label]="pendingLabel()">
+                      {{ pendingApprovals() }}
+                    </span>
+                  }
+                </span>
                 <span class="w-full truncate px-0.5 text-center text-[11px] leading-none">
                   {{ item.label }}
                 </span>
@@ -216,11 +236,45 @@ import { ThemeToggle } from './theme-toggle';
       border-radius: 0 0 2px 2px;
     }
     .tab-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+    /* Cuenta de solicitudes por resolver. El número ES el dato: un punto de color solo
+       diría "algo pasa" sin decir cuánto, y además el color no basta (WCAG 1.4.1). */
+    .nav-count {
+      flex: none;
+      min-width: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 20px;
+      text-align: center;
+    }
+
+    .tab-count {
+      position: absolute;
+      top: -6px;
+      left: 12px;
+      min-width: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 18px;
+      text-align: center;
+      /* Anillo del color del fondo de la barra: separa el número del icono sin
+         necesitar un borde que en oscuro se vería como un halo. */
+      box-shadow: 0 0 0 2px var(--surface-raised);
+    }
   `,
 })
 export class AppShell {
   protected readonly auth = inject(AuthService);
   private readonly household = inject(HouseholdContextService);
+  private readonly pending = inject(PendingApprovalsService);
   private readonly router = inject(Router);
 
   private readonly currentUrl = signal(this.router.url);
@@ -252,11 +306,42 @@ export class AppShell {
   // Cargarlo en el shell llegaba tarde para las decisiones de hogar, que se toman en el
   // guard y necesitan la lista de hogares ya poblada.
 
-  protected readonly householdName = computed(() => this.household.shellHousehold()?.name ?? 'Cellier');
+  protected readonly households = this.household.households;
 
-  protected readonly householdMemberCount = computed(
-    () => this.household.shellHousehold()?.memberCount ?? 0,
-  );
+  /**
+   * Cuál sale marcado en el selector. Fuera de `/h/:householdId` —en Ajustes— no hay hogar
+   * activo, y se rotula con el de arranque para que la navegación siga sabiendo a cuál
+   * volver.
+   */
+  protected readonly activeHouseholdId = computed(() => this.household.shellHousehold()?.id ?? null);
+
+  protected readonly pendingApprovals = this.pending.badgeCount;
+
+  protected readonly pendingLabel = computed(() => {
+    const count = this.pendingApprovals();
+    return count === 1
+      ? '1 solicitud de ingreso por resolver'
+      : `${count} solicitudes de ingreso por resolver`;
+  });
+
+  /**
+   * Cambiar de hogar conserva la sección: quien está mirando las recetas de una casa y
+   * cambia a otra quiere ver las recetas de la otra, no volver a la despensa.
+   */
+  protected switchHousehold(householdId: string): void {
+    void this.router.navigate(['/h', householdId, this.currentSection()]);
+  }
+
+  protected goToOnboarding(): void {
+    void this.router.navigate(['/onboarding']);
+  }
+
+  private currentSection(): string {
+    const segments = this.currentUrl().split(/[?#]/, 1)[0].split('/').filter(Boolean);
+    // ['h', '<id>', '<sección>', …]
+    const section = segments.length > 2 ? segments[2] : 'pantry';
+    return NAV_DESTINATIONS.some((d) => d.segment === section) ? section : 'pantry';
+  }
 
   /**
    * Enlace a una sección del hogar que rotula el chasis. Devuelve la raíz mientras no haya
