@@ -22,6 +22,11 @@ import { ThemeToggle } from './theme-toggle';
  * franja móvil, para que ni la barra ni el botón flotante tapen la última fila
  * de una lista.
  */
+/** Secciones con pantalla propia que no son destinos de la navegación. */
+const EXTRA_SECTIONS: Record<string, string> = {
+  manage: 'Administrar hogar',
+};
+
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -172,7 +177,11 @@ import { ThemeToggle } from './theme-toggle';
 
       <!-- ============ ACCIÓN PRINCIPAL (<1024px) ============ -->
       <!-- Se apoya sobre la barra inferior. El <main> reserva su alto más el de
-           la barra, para que nunca tape la última fila de una lista. -->
+           la barra, para que nunca tape la última fila de una lista.
+
+           Sólo en la despensa: es "añadir artículo", y sobre la pantalla de gestión o
+           sobre ajustes era un botón flotante que no significaba nada allí. -->
+      @if (showFab()) {
       <button
         type="button"
         class="fixed right-4 z-40 flex h-14 w-14 items-center justify-center
@@ -185,6 +194,7 @@ import { ThemeToggle } from './theme-toggle';
         aria-label="Añadir artículo">
         <ui-icon name="plus" [size]="24" />
       </button>
+      }
     </div>
   `,
   styles: `
@@ -290,7 +300,13 @@ export class AppShell {
     if (last === 'settings') {
       return SETTINGS_DESTINATION.label;
     }
-    return NAV_DESTINATIONS.find((destination) => destination.segment === last)?.label ?? 'Cellier';
+    return (
+      NAV_DESTINATIONS.find((destination) => destination.segment === last)?.label ??
+      // Secciones que no están en la navegación pero sí tienen nombre propio. Sin esto la
+      // cabecera de escritorio rotulaba "Cellier", que no dice dónde estás.
+      EXTRA_SECTIONS[last] ??
+      'Cellier'
+    );
   });
 
   protected readonly destinations = NAV_DESTINATIONS;
@@ -317,6 +333,9 @@ export class AppShell {
 
   protected readonly pendingApprovals = this.pending.badgeCount;
 
+  /** El botón flotante pertenece a la despensa; fuera de ella no tiene acción que ofrecer. */
+  protected readonly showFab = computed(() => this.currentSection() === 'pantry');
+
   protected readonly pendingLabel = computed(() => {
     const count = this.pendingApprovals();
     return count === 1
@@ -336,6 +355,7 @@ export class AppShell {
     void this.router.navigate(['/onboarding']);
   }
 
+  /** La sección de la URL actual, o la despensa si no se reconoce ninguna. */
   private currentSection(): string {
     const segments = this.currentUrl().split(/[?#]/, 1)[0].split('/').filter(Boolean);
     // ['h', '<id>', '<sección>', …]

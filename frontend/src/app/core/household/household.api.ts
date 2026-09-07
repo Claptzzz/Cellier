@@ -27,8 +27,9 @@ export class HouseholdApi {
   private readonly base = '/api/v1/households';
 
   /**
-   * Para las llamadas cuyo error el usuario tiene que corregir en el sitio: un código de
-   * ingreso equivocado se enseña bajo el campo, no en un aviso que se va solo.
+   * Para las llamadas cuyo error gestiona la pantalla: un código de ingreso equivocado se
+   * enseña bajo el campo, y el fallo de una acción optimista tiene que decir sobre QUIÉN
+   * falló —«No se pudo aprobar a Camila»— antes de deshacer lo que ya se había pintado.
    */
   private readonly handledByCaller = new HttpContext().set(SKIP_ERROR_TOAST, true);
 
@@ -66,12 +67,19 @@ export class HouseholdApi {
   }
 
   changeRole(householdId: string, userId: string, role: HouseholdRole): Observable<HouseholdMember> {
-    return this.http.patch<HouseholdMember>(`${this.base}/${householdId}/members/${userId}`, { role });
+    return this.http.patch<HouseholdMember>(
+      `${this.base}/${householdId}/members/${userId}`,
+      { role },
+      { context: this.handledByCaller },
+    );
   }
 
   /** Expulsa a alguien, o sale uno mismo si `userId` es el propio. */
   removeMember(householdId: string, userId: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/${householdId}/members/${userId}`);
+    return this.http.delete<void>(
+      `${this.base}/${householdId}/members/${userId}`,
+      { context: this.handledByCaller },
+    );
   }
 
   // -- Solicitudes, lado del administrador ---------------------------------
@@ -84,12 +92,18 @@ export class HouseholdApi {
 
   approve(householdId: string, joinRequestId: string): Observable<JoinRequest> {
     return this.http.post<JoinRequest>(
-      `${this.base}/${householdId}/join-requests/${joinRequestId}:approve`, {});
+      `${this.base}/${householdId}/join-requests/${joinRequestId}:approve`,
+      {},
+      { context: this.handledByCaller },
+    );
   }
 
   reject(householdId: string, joinRequestId: string): Observable<JoinRequest> {
     return this.http.post<JoinRequest>(
-      `${this.base}/${householdId}/join-requests/${joinRequestId}:reject`, {});
+      `${this.base}/${householdId}/join-requests/${joinRequestId}:reject`,
+      {},
+      { context: this.handledByCaller },
+    );
   }
 
   // -- Solicitudes, lado del solicitante -----------------------------------

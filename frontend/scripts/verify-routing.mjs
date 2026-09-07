@@ -32,6 +32,16 @@ const browser = await chromium.launch();
 async function visita({ path, profile, lastHousehold, misSolicitudes = [] }) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  // Red de seguridad: cualquier peticion a /api que no este simulada se responde vacia y
+  // se anota. Sin esto, un endpoint nuevo sin mock sale al backend real, vuelve 401, el
+  // interceptor intenta refrescar con un token de mentira y CIERRA LA SESION: los casos
+  // acaban en /login y el fallo parece del producto. Ya paso dos veces.
+  const sinSimular = new Set();
+  await page.route('**/api/**', (r) => {
+    sinSimular.add(new URL(r.request().url()).pathname);
+    r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+
   await page.route('**/api/v1/me', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profile) }));
   await page.route('**/api/v1/join-requests/mine', (r) =>
@@ -54,7 +64,12 @@ async function visita({ path, profile, lastHousehold, misSolicitudes = [] }) {
     .textContent().catch(() => null);
   const guardado = await page.evaluate(() => localStorage.getItem('cellier.lastHouseholdId'));
   await context.close();
-  return { url, aviso: aviso?.trim().replace(/\s+/g, ' ') ?? null, guardado };
+  return {
+    url,
+    aviso: aviso?.trim().replace(/\s+/g, ' ') ?? null,
+    guardado,
+    sinSimular: [...sinSimular],
+  };
 }
 
 const casos = [
@@ -90,8 +105,10 @@ const casos = [
 ];
 
 let fallos = 0;
+const huecos = new Set();
 for (const [nombre, opciones, esperado] of casos) {
-  const { url, aviso, guardado } = await visita(opciones);
+  const { url, aviso, guardado, sinSimular } = await visita(opciones);
+  sinSimular.forEach((u) => huecos.add(u));
   const ok = url === esperado;
   if (!ok) fallos++;
   console.log(`${ok ? 'OK  ' : 'FALLA'} ${nombre}`);
@@ -109,5 +126,9 @@ console.log(`      ajeno       -> ${a.url} · "${a.aviso}"`);
 console.log(`      inexistente -> ${b.url} · "${b.aviso}"`);
 
 await browser.close();
+if (huecos.size) {
+  console.log(`\nAviso: ${huecos.size} endpoint(s) sin simular, respondidos vacios:`);
+  [...huecos].forEach((u) => console.log(`  ${u}`));
+}
 console.log(fallos === 0 ? '\nTodos los casos pasan.' : `\n${fallos} caso(s) fallan.`);
 process.exit(fallos === 0 ? 0 : 1);

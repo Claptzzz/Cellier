@@ -1,8 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -10,13 +10,11 @@ import {
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 
+import { ViewportService } from '../core/layout/viewport.service';
 import type { HouseholdSummary } from '../core/household/household.models';
 import { BottomSheet } from '../shared/ui/bottom-sheet';
 import { Icon } from '../shared/ui/icon';
 import { Menu } from '../shared/ui/menu';
-
-/** A partir de aquí hay sidebar, y el selector se despliega anclado en vez de subir. */
-const DESKTOP = '(min-width: 1024px)';
 
 /**
  * Selector de hogar.
@@ -157,9 +155,9 @@ export class HouseholdSwitcher {
 
   protected readonly open = signal(false);
 
-  protected readonly isDesktop = signal(
-    typeof matchMedia === 'function' ? matchMedia(DESKTOP).matches : true,
-  );
+  private readonly viewport = inject(ViewportService);
+
+  protected readonly isDesktop = this.viewport.isDesktop;
 
   protected readonly active = computed(
     () => this.households().find((candidate) => candidate.id === this.activeId()) ?? null,
@@ -185,17 +183,12 @@ export class HouseholdSwitcher {
   );
 
   constructor() {
-    if (typeof matchMedia === 'function') {
-      const query = matchMedia(DESKTOP);
-      const onChange = (event: MediaQueryListEvent) => {
-        this.isDesktop.set(event.matches);
-        // Girar el dispositivo con el selector abierto dejaría el contenido en un
-        // contenedor que se desmonta: se cierra y ya está.
-        this.open.set(false);
-      };
-      query.addEventListener('change', onChange);
-      inject(DestroyRef).onDestroy(() => query.removeEventListener('change', onChange));
-    }
+    // Girar el dispositivo con el selector abierto dejaría el contenido en un contenedor
+    // que se desmonta: se cierra y ya está.
+    effect(() => {
+      this.viewport.breakpointChanged();
+      this.open.set(false);
+    });
   }
 
   protected initialOf(name: string): string {

@@ -27,6 +27,12 @@ async function arranca({ nombre, rutas, esperaMs = 6000, reintento = false }) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
 
+  // Red de seguridad, igual que en verify-routing: un endpoint sin simular no puede
+  // acabar cerrando la sesion y falseando el resultado. Va la PRIMERA: en Playwright
+  // gana la ruta registrada mas tarde, asi que cualquier mock concreto la sustituye.
+  await page.route('**/api/**', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+
   // El escenario del reintento: primero el servidor no contesta, y cuando el usuario
   // pulsa el boton ya esta de vuelta.
   let caido = reintento;

@@ -6,6 +6,7 @@ import {
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 
 /**
@@ -30,6 +31,7 @@ import {
       <div
         class="ui-menu-panel"
         [class.ui-menu-panel--end]="align() === 'end'"
+        [class.ui-menu-panel--above]="above()"
         role="group"
         [attr.aria-label]="label()">
         <ng-content />
@@ -61,6 +63,10 @@ import {
 
     .ui-menu-panel--end { left: auto; right: 0; }
 
+    /* Abierto en la última fila de una lista, el panel se saldría por abajo. Se voltea
+       para crecer hacia arriba desde el borde superior del disparador. */
+    .ui-menu-panel--above { top: auto; bottom: calc(100% + 6px); transform-origin: bottom; }
+
     /* Aparece desde el borde del disparador, no desde el centro: el movimiento indica
        de dónde sale el panel. Bajo movimiento reducido, sólo el fundido. */
     .ui-menu-panel { animation: ui-menu-in 120ms ease-out; transform-origin: top; }
@@ -82,6 +88,12 @@ export class Menu {
 
   readonly closed = output<void>();
 
+  /**
+   * Si el panel crece hacia arriba. Se decide midiendo, no por una regla fija: el mismo
+   * menú en la primera fila de una lista tiene sitio de sobra y en la última no.
+   */
+  protected readonly above = signal(false);
+
   /** Quién tenía el foco al abrir, para devolvérselo al cerrar. */
   private previouslyFocused: HTMLElement | null = null;
 
@@ -92,10 +104,14 @@ export class Menu {
       }
 
       this.previouslyFocused = document.activeElement as HTMLElement | null;
+      this.above.set(false);
 
-      // El foco entra en el panel: si se quedara en el disparador, un lector de pantalla
-      // no anunciaría lo que acaba de aparecer.
-      queueMicrotask(() => this.focusFirst());
+      queueMicrotask(() => {
+        this.placeVertically();
+        // El foco entra en el panel: si se quedara en el disparador, un lector de
+        // pantalla no anunciaría lo que acaba de aparecer.
+        this.focusFirst();
+      });
 
       const onKeydown = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
@@ -130,6 +146,34 @@ export class Menu {
 
   private panel(): HTMLElement | null {
     return this.container()?.querySelector('.ui-menu-panel') ?? null;
+  }
+
+  /**
+   * Coloca el panel arriba o abajo según el sitio que quede, midiendo la geometría real.
+   *
+   * <p>Hace falta porque este panel se abre también dentro de filas de listas largas: en
+   * la última fila, creciendo hacia abajo, quedaría fuera de la pantalla. Y un elemento
+   * fuera de vista no está oculto, así que ninguna comprobación de visibilidad lo
+   * delataría —es la misma trampa que dejó la hoja inferior invisible dentro de la
+   * cabecera—.
+   */
+  private placeVertically(): void {
+    const panel = this.panel();
+    const trigger = this.container();
+    if (!panel || !trigger) {
+      return;
+    }
+
+    const anchor = trigger.getBoundingClientRect();
+    const alto = panel.getBoundingClientRect().height;
+    const holgura = 12;
+
+    const cabeDebajo = anchor.bottom + 6 + alto + holgura <= window.innerHeight;
+    const cabeEncima = anchor.top - 6 - alto - holgura >= 0;
+
+    // Sólo se voltea si arriba cabe de verdad: si no cabe en ningún sitio, es mejor
+    // abajo, donde el propio panel puede desplazarse con su `max-height`.
+    this.above.set(!cabeDebajo && cabeEncima);
   }
 
   private focusFirst(): void {

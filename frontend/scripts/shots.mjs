@@ -334,5 +334,94 @@ for (const target of ONBOARDING) {
   }
 }
 
+// ---- Administrar el hogar ----
+const MIEMBROS = [
+  { userId: 'u0', displayName: 'Ana Rivas', email: 'ana.rivas@gmail.com', avatarUrl: null,
+    role: 'ADMIN', joinedAt: '2026-08-24T20:15:30Z' },
+  { userId: 'u1', displayName: 'Camila Soto', email: 'camila.soto@gmail.com', avatarUrl: null,
+    role: 'MEMBER', joinedAt: '2026-09-01T10:00:00Z' },
+  { userId: 'u2', displayName: 'Diego Paz', email: 'diego.paz@gmail.com', avatarUrl: null,
+    role: 'ADMIN', joinedAt: '2026-09-02T11:30:00Z' },
+];
+const SOLICITUDES = [
+  { id: 'r1', userId: 'u9', displayName: 'Camila Soto', email: 'camila.otra@gmail.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z',
+    resolvedAt: null, resolvedByUserId: null },
+  { id: 'r2', userId: 'u8', displayName: 'Diego Paz', email: 'diego.otro@gmail.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-05T18:02:00Z',
+    resolvedAt: null, resolvedByUserId: null },
+];
+const DETALLE = {
+  id: HOUSEHOLD_ID, name: 'Casa Rivas', joinCode: 'K7M2QP9X',
+  role: 'ADMIN', memberCount: 3, createdAt: '2026-09-01T10:00:00Z',
+};
+const PERFIL_ADMIN = {
+  ...PROFILE,
+  id: 'u0',
+  // El recuento del perfil tiene que cuadrar con la lista que devuelve el mock: una
+  // captura que dice "4 miembros" sobre una lista de 3 se contradice sola.
+  households: PROFILE.households.map((h) =>
+    h.id === HOUSEHOLD_ID ? { ...h, memberCount: 3 } : h),
+};
+
+const MANAGE = [
+  { slug: 'manage', miembros: MIEMBROS, solicitudes: SOLICITUDES },
+  {
+    // Hogar recien creado: sin solicitudes y con una sola persona dentro.
+    slug: 'manage-empty', miembros: [MIEMBROS[0]], solicitudes: [],
+  },
+  {
+    slug: 'manage-confirm', miembros: MIEMBROS, solicitudes: SOLICITUDES,
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Acciones sobre Camila Soto' }).click();
+      await page.getByRole('button', { name: 'Expulsar del hogar' }).click();
+      await page.getByText('Expulsar a Camila Soto del hogar').waitFor({ timeout: 5000 });
+    },
+  },
+  {
+    // El unico administrador: acciones deshabilitadas y el motivo a la vista.
+    slug: 'manage-last-admin', miembros: [MIEMBROS[0], MIEMBROS[1]], solicitudes: [],
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Acciones sobre Ana Rivas' }).click();
+      await page.getByText('conservar al menos un administrador').waitFor({ timeout: 5000 });
+    },
+  },
+  { slug: 'manage-loading', miembros: null, solicitudes: null, esperaMs: 400 },
+];
+
+for (const target of MANAGE) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(PERFIL_ADMIN));
+      const colgada = () => {};
+      await page.route('**/members', target.miembros ? json(target.miembros) : colgada);
+      await page.route('**/join-requests**', target.solicitudes ? json(target.solicitudes) : colgada);
+      await page.route(`**/households/${HOUSEHOLD_ID}`, target.miembros ? json(DETALLE) : colgada);
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/manage`, { waitUntil: 'commit' });
+      await page.waitForTimeout(target.esperaMs ?? 1100);
+      if (target.interactuar) await target.interactuar(page);
+      await page.waitForTimeout(350);
+
+      const name = `${target.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !target.interactuar });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
 await browser.close();
 console.log(JSON.stringify(results, null, 2));
