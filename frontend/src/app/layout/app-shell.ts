@@ -5,7 +5,6 @@ import { filter } from 'rxjs';
 import { AuthService } from '../core/auth/auth.service';
 import { HouseholdContextService } from '../core/household/household-context.service';
 import { Icon } from '../shared/ui/icon';
-import { ToastHost } from '../shared/ui/toast-host';
 import { HouseholdSwitcher } from './household-switcher';
 import { NAV_DESTINATIONS, SETTINGS_DESTINATION } from './nav';
 import { ThemeToggle } from './theme-toggle';
@@ -27,7 +26,7 @@ import { ThemeToggle } from './theme-toggle';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive,
-    Icon, ThemeToggle, HouseholdSwitcher, ToastHost,
+    Icon, ThemeToggle, HouseholdSwitcher,
   ],
   template: `
     <div class="flex min-h-dvh flex-col bg-surface lg:flex-row">
@@ -166,8 +165,6 @@ import { ThemeToggle } from './theme-toggle';
         aria-label="Añadir artículo">
         <ui-icon name="plus" [size]="24" />
       </button>
-
-      <ui-toast-host />
     </div>
   `,
   styles: `

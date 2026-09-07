@@ -80,6 +80,14 @@ export class Input implements ControlValueAccessor {
   /** Se desactiva en correos, códigos y nombres de usuario. */
   readonly spellcheck = input(false);
 
+  /**
+   * Anchura fija y letras separadas, para valores que se transcriben carácter a carácter
+   * —un código de invitación— en vez de leerse como palabra. Es el mismo motivo por el
+   * que las cantidades van en monoespaciada: lo que se compara o se copia signo a signo
+   * necesita que todos los signos ocupen lo mismo.
+   */
+  readonly mono = input(false);
+
   protected readonly value = signal('');
   protected readonly disabled = signal(false);
 
@@ -102,6 +110,9 @@ export class Input implements ControlValueAccessor {
       'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent',
       'disabled:opacity-45 disabled:cursor-not-allowed disabled:bg-surface-sunken',
       this.error() ? 'border-danger' : 'border-border-strong hover:border-text-muted',
+      // El tamaño sigue siendo --text-control: la monoespaciada cambia la familia y el
+      // espaciado, nunca los 16px que evitan el auto-zoom de Safari en iOS.
+      this.mono() ? 'font-mono tracking-[0.14em] uppercase' : '',
     ].join(' '),
   );
 

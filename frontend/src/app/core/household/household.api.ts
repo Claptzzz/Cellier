@@ -1,6 +1,8 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+
+import { SKIP_ERROR_TOAST } from '../auth/error.interceptor';
 
 import type {
   HouseholdDetail,
@@ -24,6 +26,12 @@ export class HouseholdApi {
 
   private readonly base = '/api/v1/households';
 
+  /**
+   * Para las llamadas cuyo error el usuario tiene que corregir en el sitio: un código de
+   * ingreso equivocado se enseña bajo el campo, no en un aviso que se va solo.
+   */
+  private readonly handledByCaller = new HttpContext().set(SKIP_ERROR_TOAST, true);
+
   // -- Hogares -------------------------------------------------------------
 
   list(): Observable<readonly HouseholdSummary[]> {
@@ -31,7 +39,7 @@ export class HouseholdApi {
   }
 
   create(name: string): Observable<HouseholdDetail> {
-    return this.http.post<HouseholdDetail>(this.base, { name });
+    return this.http.post<HouseholdDetail>(this.base, { name }, { context: this.handledByCaller });
   }
 
   get(householdId: string): Observable<HouseholdDetail> {
@@ -88,7 +96,11 @@ export class HouseholdApi {
 
   /** Enviar el código no da acceso: abre una solicitud que un administrador debe aprobar. */
   requestToJoin(joinCode: string): Observable<MyJoinRequest> {
-    return this.http.post<MyJoinRequest>('/api/v1/join-requests', { joinCode });
+    return this.http.post<MyJoinRequest>(
+      '/api/v1/join-requests',
+      { joinCode },
+      { context: this.handledByCaller },
+    );
   }
 
   myJoinRequests(): Observable<readonly MyJoinRequest[]> {

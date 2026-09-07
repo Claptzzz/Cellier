@@ -170,5 +170,106 @@ for (const theme of THEMES) {
   await context.close();
 }
 
+// ---- Onboarding: los dos caminos, el codigo recien creado y la sala de espera ----
+// Cada pantalla necesita un backend distinto, asi que no encajan en el bucle de PAGES.
+const SIN_HOGARES = { ...PROFILE, households: [] };
+const CREADO = {
+  id: HOUSEHOLD_ID, name: 'Casa Rivas', joinCode: 'K7M2QP9X',
+  role: 'ADMIN', memberCount: 1, createdAt: '2026-09-04T09:15:02Z',
+};
+const MIS_SOLICITUDES = [
+  { id: 's1', householdId: HOUSEHOLD_ID, householdName: 'Casa Rivas',
+    status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z', resolvedAt: null },
+  { id: 's2', householdId: 'b41d0f77-6c58-4e92-8a03-5fd91c2e7a64', householdName: 'Depa \u00d1u\u00f1oa',
+    status: 'APPROVED', requestedAt: '2026-09-02T18:40:00Z', resolvedAt: '2026-09-03T08:12:00Z' },
+  { id: 's3', householdId: 'c72e1a55-1111-4a22-9b33-4c5d6e7f8090', householdName: 'Casa de la playa',
+    status: 'REJECTED', requestedAt: '2026-08-28T20:41:17Z', resolvedAt: '2026-08-29T08:03:55Z' },
+];
+
+const json = (body) => (r) =>
+  r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+const ONBOARDING = [
+  { slug: 'onboarding', path: '/onboarding', perfil: SIN_HOGARES,
+    rutas: [['**/api/v1/join-requests/mine', json([])]] },
+  {
+    slug: 'onboarding-created', path: '/onboarding', perfil: SIN_HOGARES,
+    rutas: [
+      ['**/api/v1/join-requests/mine', json([])],
+      ['**/api/v1/households', (r) => (r.request().method() === 'POST' ? json(CREADO)(r) : json([])(r))],
+    ],
+    // El codigo solo aparece despues de crear: hay que crear.
+    async interactuar(page) {
+      await page.getByLabel('Nombre del hogar').fill('Casa Rivas');
+      await page.getByRole('button', { name: 'Crear hogar' }).click();
+      await page.getByText('K7M2QP9X').waitFor({ timeout: 5000 });
+    },
+  },
+  {
+    // Con navigator.share disponible. Chromium de escritorio NO lo expone, asi que sin
+    // este caso la rama de compartir no se veria en ninguna captura.
+    slug: 'onboarding-created-share', path: '/onboarding', perfil: SIN_HOGARES,
+    conShare: true,
+    rutas: [
+      ['**/api/v1/join-requests/mine', json([])],
+      ['**/api/v1/households', (r) => (r.request().method() === 'POST' ? json(CREADO)(r) : json([])(r))],
+    ],
+    async interactuar(page) {
+      await page.getByLabel('Nombre del hogar').fill('Casa Rivas');
+      await page.getByRole('button', { name: 'Crear hogar' }).click();
+      await page.getByText('K7M2QP9X').waitFor({ timeout: 5000 });
+    },
+  },
+  { slug: 'onboarding-pending', path: '/onboarding/pending', perfil: SIN_HOGARES,
+    rutas: [['**/api/v1/join-requests/mine', json(MIS_SOLICITUDES)]] },
+  { slug: 'onboarding-pending-empty', path: '/onboarding/pending', perfil: SIN_HOGARES,
+    rutas: [['**/api/v1/join-requests/mine', json([])]] },
+  {
+    slug: 'onboarding-pending-loading', path: '/onboarding/pending', perfil: SIN_HOGARES,
+    // Respuesta que no llega dentro de la ventana de captura: asi se fotografia el
+    // esqueleto, que es lo que ve alguien con una conexion lenta.
+    rutas: [['**/api/v1/join-requests/mine', () => {}]],
+    esperaMs: 900,
+  },
+];
+
+for (const target of ONBOARDING) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(target.perfil));
+      for (const [patron, handler] of target.rutas ?? []) {
+        await page.route(patron, handler);
+      }
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+      if (target.conShare) {
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'share', { value: async () => {}, configurable: true });
+        });
+      }
+
+      await page.goto(BASE + target.path, { waitUntil: 'commit' });
+      await page.waitForTimeout(target.esperaMs ?? 800);
+      if (target.interactuar) await target.interactuar(page);
+      await page.waitForTimeout(250);
+
+      const name = `${target.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
 await browser.close();
 console.log(JSON.stringify(results, null, 2));

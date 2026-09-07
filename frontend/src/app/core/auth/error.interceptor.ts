@@ -1,4 +1,10 @@
-import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpRequest } from '@angular/common/http';
+import {
+  HttpContextToken,
+  HttpErrorResponse,
+  HttpEvent,
+  HttpHandlerFn,
+  HttpRequest,
+} from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Observable, catchError, throwError } from 'rxjs';
 
@@ -22,6 +28,18 @@ const FALLBACK: Record<number, string> = {
   500: 'Error del servidor. Inténtalo de nuevo más tarde.',
   503: 'El servicio no está disponible. Inténtalo más tarde.',
 };
+
+/**
+ * Marca una petición cuyos errores gestiona quien la lanza.
+ *
+ * <p>Un aviso flotante es el sitio equivocado para el error de un formulario: aparece
+ * lejos del campo que hay que corregir y se va solo antes de que se corrija. Cuando la
+ * pantalla ya muestra el error junto al campo, el aviso automático sólo duplica.
+ *
+ * <p>Es un `HttpContext` y no una cabecera a propósito: es una instrucción para el
+ * cliente y no tiene por qué viajar por la red.
+ */
+export const SKIP_ERROR_TOAST = new HttpContextToken<boolean>(() => false);
 
 function isProblemDetail(body: unknown): body is ProblemDetail {
   return typeof body === 'object' && body !== null && ('title' in body || 'detail' in body);
@@ -51,6 +69,12 @@ export function errorInterceptor(
       // El 401 lo gestiona authInterceptor: puede recuperarse con un refresco y
       // avisar aquí produciría un toast por cada renovación silenciosa.
       if (error.status === 401) {
+        return throwError(() => error);
+      }
+
+      // Quien lanzó la petición se encarga: normalmente porque enseña el error donde
+      // el usuario tiene que actuar, junto al campo.
+      if (request.context.get(SKIP_ERROR_TOAST)) {
         return throwError(() => error);
       }
 
