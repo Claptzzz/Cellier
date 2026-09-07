@@ -11,9 +11,14 @@ mkdirSync(OUT, { recursive: true });
 
 const VIEWPORTS = { '375': { width: 375, height: 812 }, '1440': { width: 1440, height: 900 } };
 const THEMES = ['light', 'dark'];
+// El hogar vive en la URL desde el Incremento 3, asi que las rutas de seccion
+// llevan su id. `/pantry` sigue existiendo como redireccion desde las URLs
+// antiguas, pero aqui se apunta al destino real para no capturar un rebote.
+const HOUSEHOLD_ID = '8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98';
+
 const PAGES = [
   { slug: 'login', path: '/login', auth: false },
-  { slug: 'shell-pantry', path: '/pantry', auth: true },
+  { slug: 'shell-pantry', path: `/h/${HOUSEHOLD_ID}/pantry`, auth: true },
   { slug: 'dev-ui', path: '/dev/ui', auth: true },
 ];
 
@@ -25,6 +30,12 @@ const PROFILE = {
   locale: 'es-CL',
   themePreference: 'SYSTEM',
   createdAt: '2026-08-24T20:15:30Z',
+  // El perfil trae los hogares del usuario. Sin ellos el guard mandaria a
+  // /onboarding y las capturas del chasis saldrian de la pantalla equivocada.
+  households: [
+    { id: HOUSEHOLD_ID, name: 'Casa Rivas', role: 'ADMIN', memberCount: 4 },
+    { id: 'b41d0f77-6c58-4e92-8a03-5fd91c2e7a64', name: 'Depa Ñuñoa', role: 'MEMBER', memberCount: 2 },
+  ],
 };
 
 const browser = await chromium.launch();

@@ -1,7 +1,12 @@
 import type { IconName } from '../shared/ui/icon.data';
 
 export interface NavDestination {
-  readonly path: string;
+  /**
+   * Segmento relativo al hogar activo, sin barra inicial. El enlace completo lo compone
+   * el shell con el id de la ruta: no existe "la despensa", existe la despensa DE UN
+   * HOGAR, y un destino con ruta absoluta no podría decir de cuál.
+   */
+  readonly segment: string;
   readonly label: string;
   readonly icon: IconName;
 }
@@ -17,14 +22,18 @@ export interface NavDestination {
  * 375, así que vive en el menú de la cuenta (móvil) y en el pie del sidebar.
  */
 export const NAV_DESTINATIONS: readonly NavDestination[] = [
-  { path: '/pantry', label: 'Despensa', icon: 'package' },
-  { path: '/templates', label: 'Plantillas', icon: 'list-checks' },
-  { path: '/recipes', label: 'Recetas', icon: 'fork-knife' },
-  { path: '/home', label: 'Hogar', icon: 'house' },
+  { segment: 'pantry', label: 'Despensa', icon: 'package' },
+  { segment: 'templates', label: 'Plantillas', icon: 'list-checks' },
+  { segment: 'recipes', label: 'Recetas', icon: 'fork-knife' },
+  { segment: 'home', label: 'Hogar', icon: 'house' },
 ];
 
-export const SETTINGS_DESTINATION: NavDestination = {
+/**
+ * Ajustes es del usuario y no de un hogar, así que su ruta es absoluta y no se compone
+ * con ningún id.
+ */
+export const SETTINGS_DESTINATION = {
   path: '/settings',
   label: 'Ajustes',
   icon: 'gear',
-};
+} as const satisfies { path: string; label: string; icon: IconName };

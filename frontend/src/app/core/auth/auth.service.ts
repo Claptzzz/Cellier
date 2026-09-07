@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, catchError, of, tap } from 'rxjs';
 
 import type { AuthResponse, UserProfile } from './auth.models';
 
@@ -59,6 +59,23 @@ export class AuthService {
     return this.http
       .post<AuthResponse>('/api/v1/auth/refresh', { refreshToken })
       .pipe(tap((response) => this.applySession(response)));
+  }
+
+  /**
+   * Garantiza que hay perfil antes de seguir. Lo usa el guard: las decisiones sobre
+   * hogares dependen de `user().households`, y al recargar la página el perfil todavía
+   * no está —el access token vive sólo en memoria—, así que sin esto el guard decidiría
+   * con una lista vacía y mandaría a la bienvenida a alguien que sí tiene hogares.
+   *
+   * <p>Un fallo de red devuelve `null` en vez de romper la navegación; de la sesión
+   * inválida ya se encarga el interceptor.
+   */
+  ensureProfileLoaded(): Observable<UserProfile | null> {
+    const current = this.userSignal();
+    if (current) {
+      return of(current);
+    }
+    return this.loadProfile().pipe(catchError(() => of(null)));
   }
 
   loadProfile(): Observable<UserProfile> {

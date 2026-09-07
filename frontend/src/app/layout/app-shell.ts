@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
 import { AuthService } from '../core/auth/auth.service';
+import { HouseholdContextService } from '../core/household/household-context.service';
 import { Icon } from '../shared/ui/icon';
 import { ToastHost } from '../shared/ui/toast-host';
 import { HouseholdSwitcher } from './household-switcher';
@@ -43,15 +44,17 @@ import { ThemeToggle } from './theme-toggle';
         </div>
 
         <div class="px-3 pb-3">
-          <app-household-switcher [name]="householdName" [memberCount]="householdMembers" />
+          <app-household-switcher
+            [name]="householdName()"
+            [memberCount]="householdMemberCount()" />
         </div>
 
         <nav class="flex-1 px-2" aria-label="Secciones">
           <ul class="flex flex-col gap-0.5">
-            @for (item of destinations; track item.path) {
+            @for (item of destinations; track item.segment) {
               <li>
                 <a
-                  [routerLink]="item.path"
+                  [routerLink]="linkTo(item.segment)"
                   routerLinkActive="is-active"
                   class="nav-link"
                   #rla="routerLinkActive"
@@ -87,7 +90,7 @@ import { ThemeToggle } from './theme-toggle';
 
           <!-- El selector de hogar sólo aparece en el header cuando no hay sidebar -->
           <div class="min-w-0 flex-1 overflow-hidden lg:hidden">
-            <app-household-switcher [name]="householdName" [compact]="true" />
+            <app-household-switcher [name]="householdName()" [compact]="true" />
           </div>
 
           <!-- En desktop el hogar ya está en el selector del sidebar. Repetirlo aquí
@@ -130,10 +133,10 @@ import { ThemeToggle } from './theme-toggle';
                pb-[env(safe-area-inset-bottom)]"
         aria-label="Secciones">
         <ul class="mx-auto flex max-w-lg">
-          @for (item of destinations; track item.path) {
+          @for (item of destinations; track item.segment) {
             <li class="min-w-0 flex-1">
               <a
-                [routerLink]="item.path"
+                [routerLink]="linkTo(item.segment)"
                 routerLinkActive="is-active-tab"
                 class="tab-link"
                 #tab="routerLinkActive"
@@ -218,17 +221,25 @@ import { ThemeToggle } from './theme-toggle';
     .tab-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   `,
 })
-export class AppShell implements OnInit {
+export class AppShell {
   protected readonly auth = inject(AuthService);
+  private readonly household = inject(HouseholdContextService);
   private readonly router = inject(Router);
 
   private readonly currentUrl = signal(this.router.url);
 
-  /** Nombre de la sección activa, para el header de desktop. */
+  /**
+   * Nombre de la sección activa, para el header de desktop. Se compara contra el último
+   * segmento y no contra el principio de la URL, porque ahora la sección va detrás del
+   * hogar: `/h/<id>/pantry`.
+   */
   protected readonly sectionTitle = computed(() => {
-    const url = this.currentUrl();
-    const match = [...NAV_DESTINATIONS, SETTINGS_DESTINATION].find((d) => url.startsWith(d.path));
-    return match?.label ?? 'Cellier';
+    const segments = this.currentUrl().split(/[?#]/, 1)[0].split('/').filter(Boolean);
+    const last = segments.at(-1) ?? '';
+    if (last === 'settings') {
+      return SETTINGS_DESTINATION.label;
+    }
+    return NAV_DESTINATIONS.find((destination) => destination.segment === last)?.label ?? 'Cellier';
   });
 
   protected readonly destinations = NAV_DESTINATIONS;
@@ -240,16 +251,23 @@ export class AppShell implements OnInit {
       .subscribe((event) => this.currentUrl.set(event.urlAfterRedirects));
   }
 
-  ngOnInit(): void {
-    // Tras una recarga queda el refresh token pero no el perfil: el access token
-    // vive sólo en memoria. Se repuebla aquí; si el access caducó, el
-    // authInterceptor lo renueva de forma transparente.
-    if (this.auth.isAuthenticated() && this.auth.user() === null) {
-      this.auth.loadProfile().subscribe({ next: () => {}, error: () => {} });
-    }
-  }
+  // El perfil ya no se carga aquí: lo garantiza authGuard antes de activar la ruta.
+  // Cargarlo en el shell llegaba tarde para las decisiones de hogar, que se toman en el
+  // guard y necesitan la lista de hogares ya poblada.
 
-  // Placeholder hasta el Incremento 3 (household). Datos mock, no esquema.
-  protected readonly householdName = 'Casa Rivas';
-  protected readonly householdMembers = 4;
+  protected readonly householdName = computed(() => this.household.shellHousehold()?.name ?? 'Cellier');
+
+  protected readonly householdMemberCount = computed(
+    () => this.household.shellHousehold()?.memberCount ?? 0,
+  );
+
+  /**
+   * Enlace a una sección del hogar que rotula el chasis. Devuelve la raíz mientras no haya
+   * hogar, y desde ahí la propia raíz decide adónde ir: así el enlace nunca apunta a
+   * `/h/null/pantry`.
+   */
+  protected linkTo(segment: string): readonly string[] {
+    const id = this.household.shellHousehold()?.id;
+    return id ? ['/h', id, segment] : ['/'];
+  }
 }
