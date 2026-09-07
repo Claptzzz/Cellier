@@ -24,13 +24,28 @@ export const authGuard: CanActivateFn = (_route, state): Observable<boolean | Ur
   }
 
   return auth.ensureProfileLoaded().pipe(
-    map((profile) =>
-      profile
-        ? true
-        : router.createUrlTree(['/login'], {
-            queryParams: state.url === '/' ? {} : { redirect: state.url },
-          }),
-    ),
+    map((profile) => {
+      if (profile) {
+        return true;
+      }
+
+      // Sin perfil hay dos motivos muy distintos y no se pueden tratar igual.
+      //
+      // Si la sesión sigue en pie, el problema es el servidor: no responde, o no se
+      // pudo llegar a él. Mandar a /login sería mentir —la sesión es válida— y además
+      // produce un bucle, porque guestGuard ve la sesión y devuelve a la raíz, que
+      // vuelve a necesitar el perfil. La pantalla de reconexión rompe el ciclo y dice
+      // la verdad, con un botón para volver a intentarlo.
+      //
+      // Si la sesión ya no está, el interceptor la limpió tras un refresco fallido:
+      // eso sí es volver a entrar.
+      if (auth.isAuthenticated()) {
+        return router.createUrlTree(['/reconnect'], { queryParams: { redirect: state.url } });
+      }
+      return router.createUrlTree(['/login'], {
+        queryParams: state.url === '/' ? {} : { redirect: state.url },
+      });
+    }),
   );
 };
 

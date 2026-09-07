@@ -2,6 +2,7 @@ import { inject } from '@angular/core';
 import { Router, Routes, UrlTree } from '@angular/router';
 
 import { authGuard, guestGuard } from './core/auth/auth.guard';
+import { AuthService } from './core/auth/auth.service';
 import { HouseholdContextService } from './core/household/household-context.service';
 import { householdAdminGuard, householdGuard } from './core/household/household.guard';
 import { MyJoinRequestsService } from './core/household/my-join-requests.service';
@@ -18,8 +19,18 @@ import { environment } from '../environments/environment';
 function toActiveHousehold(section: string): () => UrlTree {
   return () => {
     const router = inject(Router);
+    const auth = inject(AuthService);
     const context = inject(HouseholdContextService);
     const myRequests = inject(MyJoinRequestsService);
+
+    // «Sin hogares» y «todavía no sé si tiene hogares» no son lo mismo, y aquí se
+    // confunden con facilidad porque esta función corre antes que cualquier guard. Si el
+    // arranque no pudo traer el perfil, decidir con la lista vacía mandaría a la
+    // bienvenida a alguien que tiene hogares, y el reintento obedecería ese destino
+    // equivocado. Mientras no se sepa, se va a reconectar.
+    if (auth.isAuthenticated() && auth.user() === null) {
+      return router.createUrlTree(['/reconnect'], { queryParams: { redirect: `/${section}` } });
+    }
 
     const householdId = context.startupHouseholdId();
     if (householdId) {
@@ -82,6 +93,14 @@ const householdSections: Routes = [
 ];
 
 export const routes: Routes = [
+  {
+    // Sin guards, y tiene que seguir sin tenerlos: es el punto donde se corta el bucle
+    // entre "hay sesión" y "no hay perfil". Cualquier guard que exigiera el perfil
+    // devolvería aquí a quien ya está aquí.
+    path: 'reconnect',
+    title: 'Sin conexión · Cellier',
+    loadComponent: () => import('./features/reconnect/reconnect-page').then((m) => m.ReconnectPage),
+  },
   {
     path: 'login',
     title: 'Entrar · Cellier',

@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, of, tap } from 'rxjs';
+import { Observable, catchError, of, tap, timeout } from 'rxjs';
 
 import type { AuthResponse, UserProfile } from './auth.models';
 
@@ -11,6 +11,19 @@ import type { AuthResponse, UserProfile } from './auth.models';
  */
 export const REFRESH_TOKEN_STORAGE_KEY = 'cellier.refreshToken';
 
+/**
+ * Cuánto se espera al perfil antes de dar el arranque por perdido.
+ *
+ * <p>Existe porque un servidor que **no responde** no produce ningún error: la petición
+ * se queda colgada para siempre y con ella el app initializer, que bloquea el primer
+ * pintado. Sin este límite, un backend congelado deja la pantalla en blanco de forma
+ * indefinida, que es peor que un error.
+ *
+ * <p>Diez segundos: por encima de lo que tarda una red móvil mala, y por debajo de lo que
+ * cualquiera aguanta mirando un indicador de carga sin conclusión.
+ */
+export const PROFILE_LOAD_TIMEOUT_MS = 10_000;
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -19,7 +32,20 @@ export class AuthService {
   private readonly refreshTokenSignal = signal<string | null>(this.readStoredRefreshToken());
   private readonly userSignal = signal<UserProfile | null>(null);
 
+  /**
+   * Un intento de cargar el perfil que falló por no poder hablar con el servidor.
+   *
+   * <p>Se recuerda para no repetir la espera: el arranque ya aguardó su turno, y si el
+   * guard volviera a intentarlo el usuario esperaría el timeout dos veces seguidas antes
+   * de ver nada. Lo limpia {@link retryProfileLoad}, que es lo que hace el botón de
+   * reintentar.
+   */
+  private readonly profileUnreachable = signal(false);
+
   readonly user = this.userSignal.asReadonly();
+
+  /** Hay sesión, pero no se pudo traer el perfil: el servidor no contesta. */
+  readonly isProfileUnreachable = this.profileUnreachable.asReadonly();
   readonly accessToken = this.accessTokenSignal.asReadonly();
 
   /**
@@ -75,7 +101,27 @@ export class AuthService {
     if (current) {
       return of(current);
     }
-    return this.loadProfile().pipe(catchError(() => of(null)));
+    if (this.profileUnreachable()) {
+      // Ya se intentó y el servidor no estaba. Responder de inmediato deja que quien
+      // pregunte enseñe la pantalla de reconexión en vez de encadenar otra espera.
+      return of(null);
+    }
+    return this.loadProfile().pipe(
+      timeout({ each: PROFILE_LOAD_TIMEOUT_MS }),
+      catchError(() => {
+        // Un 401 no llega hasta aquí como fallo de red: el interceptor lo intenta
+        // resolver refrescando y, si no puede, limpia la sesión. En ese caso
+        // `isAuthenticated()` ya es falso y quien pregunte mandará a /login.
+        this.profileUnreachable.set(true);
+        return of(null);
+      }),
+    );
+  }
+
+  /** Vuelve a intentar traer el perfil. Es lo que dispara el botón de reintentar. */
+  retryProfileLoad(): Observable<UserProfile | null> {
+    this.profileUnreachable.set(false);
+    return this.ensureProfileLoaded();
   }
 
   loadProfile(): Observable<UserProfile> {
@@ -109,6 +155,7 @@ export class AuthService {
   clearSession(): void {
     this.accessTokenSignal.set(null);
     this.userSignal.set(null);
+    this.profileUnreachable.set(false);
     this.setRefreshToken(null);
   }
 
