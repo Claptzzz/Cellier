@@ -35,7 +35,7 @@ export type LevelState = 'ok' | 'warn' | 'danger' | 'empty';
       class="band"
       role="img"
       [attr.aria-label]="ariaLabel()">
-      <div class="fill" [class]="state()" [style.height.%]="clamped()"></div>
+      <div class="fill" [class]="fillClass()" [style.height.%]="clamped()"></div>
     </div>
   `,
   styles: `
@@ -65,6 +65,11 @@ export type LevelState = 'ok' | 'warn' | 'danger' | 'empty';
     .fill.danger{ background: var(--danger); }
     .fill.empty { background: transparent; }
 
+    /* Sin objetivo, el relleno es neutro a propósito. Pintarlo de --ok y a plena altura
+       haría que el artículo del que MENOS se sabe se viera como el mejor surtido de la
+       lista, por encima de uno medido al 75%. El vencimiento lo dice el Badge. */
+    .fill.unknown { background: var(--border-strong); }
+
     /* Suelo de visibilidad: un nivel muy bajo debe seguir viéndose como una marca
        en la base, no desaparecer. Es lo que distingue "queda poquísimo" de "no hay". */
     .fill:not(.empty) { min-height: 4px; }
@@ -76,12 +81,35 @@ export type LevelState = 'ok' | 'warn' | 'danger' | 'empty';
 })
 export class LevelBand {
   /** Porcentaje restante respecto del nivel objetivo. Se recorta a 0-100. */
-  readonly level = input.required<number>();
+  readonly level = input(0);
+
+  /**
+   * Si el hogar ha definido un nivel objetivo para este artículo.
+   *
+   * Sin objetivo no hay proporción que dibujar, y rellenar el 0% diría «no queda nada»
+   * cuando lo cierto es que no se sabe cuánto debería haber. La banda pasa entonces a un
+   * estado binario —hay o no hay— y deja de afirmar un porcentaje, también en su etiqueta
+   * accesible. Es la diferencia entre «vacío» y «todavía no lo sé», aplicada al dibujo.
+   */
+  readonly hasTarget = input(true);
+
   readonly state = input<LevelState>('ok');
   /** Nombre del artículo, para componer la etiqueta accesible. */
   readonly itemLabel = input<string>('');
 
-  protected readonly clamped = computed(() => Math.min(100, Math.max(0, this.level())));
+  protected readonly clamped = computed(() => {
+    if (!this.hasTarget()) {
+      return this.state() === 'empty' ? 0 : 100;
+    }
+    return Math.min(100, Math.max(0, this.level()));
+  });
+
+  protected readonly fillClass = computed(() => {
+    if (this.state() === 'empty') {
+      return 'empty';
+    }
+    return this.hasTarget() ? this.state() : 'unknown';
+  });
 
   protected readonly ariaLabel = computed(() => {
     const texto: Record<LevelState, string> = {
@@ -91,6 +119,11 @@ export class LevelBand {
       empty: 'sin existencias',
     };
     const prefijo = this.itemLabel() ? `${this.itemLabel()}: ` : '';
+    if (!this.hasTarget()) {
+      // Sin objetivo no se puede decir un porcentaje sin inventarlo.
+      const binario = this.state() === 'empty' ? 'sin existencias' : 'hay existencias';
+      return `${prefijo}${binario}, sin nivel objetivo definido`;
+    }
     return `${prefijo}${this.clamped()}% restante, ${texto[this.state()]}`;
   });
 }

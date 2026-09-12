@@ -461,5 +461,144 @@ for (const target of MANAGE) {
   }
 }
 
+
+// ---- Despensa ---------------------------------------------------------------
+// Los cuatro estados que comparten hueco no se pueden confundir entre si, asi que
+// cada uno tiene su captura: con datos, vacia de verdad, cargando, y sin resultados.
+// Las fechas se calculan contra el dia en que se corre el script; fijarlas a mano
+// haria que "vence en 2 dias" fuera mentira manana.
+const enDias = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+const producto = (name, unit, category) => ({ id: `p-${name}`, name, unit, category });
+
+const DESPENSA = [
+  { id: 'i1', product: producto('Huevos', 'UNIT', 'Nevera'), quantity: 4, parLevel: 12,
+    expiresAt: enDias(2), version: 3 },
+  { id: 'i2', product: producto('Leche entera', 'L', 'Nevera'), quantity: 0.5, parLevel: 2,
+    expiresAt: enDias(-1), version: 7 },
+  { id: 'i3', product: producto('Lechuga', 'UNIT', 'Nevera'), quantity: 2, parLevel: null, version: 1 },
+  { id: 'i4', product: producto('Salsa de tomate', 'ML', 'Despensa'), quantity: 690, parLevel: 1000,
+    expiresAt: enDias(170), version: 2 },
+  { id: 'i5', product: producto('Aceite de oliva extra virgen', 'ML', 'Despensa'), quantity: 250,
+    parLevel: 1000, version: 4 },
+  { id: 'i6', product: producto('Arroz grano largo', 'G', 'Despensa'), quantity: 1500, parLevel: 2000,
+    version: 1 },
+  { id: 'i7', product: producto('Pan de molde', 'UNIT', 'Despensa'), quantity: 0, parLevel: 1, version: 9 },
+  { id: 'i8', product: producto('Palta', 'UNIT', 'Nevera'), quantity: 0, parLevel: null, version: 5 },
+];
+
+const ESCENAS_DESPENSA = [
+  { slug: 'despensa-lista', items: DESPENSA },
+  { slug: 'despensa-vacia', items: [] },
+  { slug: 'despensa-cargando', colgar: true, esperaMs: 700 },
+  {
+    slug: 'despensa-sin-resultados',
+    items: DESPENSA,
+    async interactuar(page) {
+      // Al buscar, la respuesta pasa a vacia: es el estado "no encaja nada", que tiene
+      // salida propia y no debe parecerse a la despensa vacia.
+      await page.route('**/pantry/items**', json([]));
+      await page.getByLabel(/Buscar en la despensa/).fill('quinoa');
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // El grupo del final, capturado a la altura a la que de verdad se lee: la captura
+    // completa pinta la barra inferior a media pagina y tapa justo este titulo.
+    slug: 'despensa-se-acabo',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(300);
+    },
+  },
+  { slug: 'despensa-error', error: true },
+];
+
+for (const escena of ESCENAS_DESPENSA) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+
+      // Catch-all primero: cualquier /api sin simular respondia 401, el interceptor
+      // cerraba la sesion y la captura acababa en /login pareciendo un fallo del producto.
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      if (escena.colgar) {
+        await page.route('**/pantry/items**', () => {});
+      } else if (escena.error) {
+        await page.route('**/pantry/items**', (r) => r.fulfill({ status: 500 }));
+      } else {
+        await page.route('**/pantry/items**', json(escena.items));
+      }
+
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
+      await page.waitForTimeout(escena.esperaMs ?? 1100);
+      if (escena.interactuar) await escena.interactuar(page);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+      // La banda de nivel y las areas tactiles se miden, no se miran.
+      const geometria = await page.evaluate(() => {
+        const fila = document.querySelector('app-pantry-row article');
+        const campo = document.querySelector('input[type="search"]');
+        return {
+          altoFila: fila ? Math.round(fila.getBoundingClientRect().height) : null,
+          altoCampo: campo ? Math.round(campo.getBoundingClientRect().height) : null,
+          filas: document.querySelectorAll('app-pantry-row').length,
+        };
+      });
+      results.push({ name, overflowPx: overflow, ...geometria });
+      await context.close();
+    }
+  }
+}
+
+
+// ---- La despensa sin color --------------------------------------------------
+// El aviso de vencimiento no puede depender del tono: --warn y --danger tienen
+// luminancias casi identicas, asi que en gris son el mismo gris. Lo que tiene que
+// seguir separando "vence en 2 dias" de "vencio ayer" es el icono y el texto.
+for (const theme of THEMES) {
+  const context = await browser.newContext({
+    viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, colorScheme: theme,
+  });
+  const page = await context.newPage();
+  await page.route('**/api/**', json([]));
+  await page.route('**/api/v1/me', json(PROFILE));
+  await page.route('**/pantry/items**', json(DESPENSA));
+  await page.addInitScript((t) => {
+    localStorage.setItem('cellier.theme', t);
+    localStorage.setItem('cellier.refreshToken', 'shot-token');
+  }, theme);
+  await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
+  await page.waitForTimeout(1100);
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.waitForTimeout(200);
+
+  const name = `despensa-gris-375-${theme}.png`;
+  await page.screenshot({ path: OUT + name, fullPage: true });
+  results.push({ name, note: 'escala de grises' });
+  await context.close();
+}
+
 await browser.close();
 console.log(JSON.stringify(results, null, 2));
