@@ -204,6 +204,7 @@ class HouseholdIntegrationTest {
         @DisplayName("el código generado tiene 8 caracteres y ninguno ambiguo")
         void formatoDelCodigo() throws Exception {
             crear(ana, "Casa Rivas")
+                    .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.joinCode").value(matchesPattern(CODIGO_VALIDO)));
         }
 
@@ -361,10 +362,12 @@ class HouseholdIntegrationTest {
             crear(bruno, "Depa Ñuñoa");
 
             mockMvc.perform(get("/api/v1/households").header(HttpHeaders.AUTHORIZATION, "Bearer " + ana))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(1))
                     .andExpect(jsonPath("$[0].name").value("Casa Rivas"));
 
             mockMvc.perform(get("/api/v1/households").header(HttpHeaders.AUTHORIZATION, "Bearer " + bruno))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(1))
                     .andExpect(jsonPath("$[0].name").value("Depa Ñuñoa"));
         }

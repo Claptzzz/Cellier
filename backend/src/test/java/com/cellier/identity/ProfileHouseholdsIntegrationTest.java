@@ -157,9 +157,11 @@ class ProfileHouseholdsIntegrationTest {
             crearHogar(accessBruno, "Depa Ñuñoa");
 
             mockMvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessAna))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.households.length()").value(1))
                     .andExpect(jsonPath("$.households[0].name").value("Casa Rivas"));
             mockMvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessBruno))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.households.length()").value(1))
                     .andExpect(jsonPath("$.households[0].name").value("Depa Ñuñoa"));
         }
@@ -195,6 +197,7 @@ class ProfileHouseholdsIntegrationTest {
 
             mockMvc.perform(get("/api/v1/me")
                             .header(HttpHeaders.AUTHORIZATION, "Bearer " + renovada.get("accessToken").asText()))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.households.length()").value(0));
         }
 
@@ -235,11 +238,13 @@ class ProfileHouseholdsIntegrationTest {
             UUID hogar = crearHogar(accessAna, "Casa Rivas");
 
             mockMvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessAna))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.households[0].memberCount").value(1));
 
             hacerMiembro(hogar, accessAna, accessBruno);
 
             mockMvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessAna))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.households[0].memberCount").value(2));
         }
     }

@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -40,6 +41,26 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleApiException(ApiException ex, HttpServletRequest request) {
         ProblemDetail problem = ProblemDetails.of(ex.getStatus(), ex.getTitle(), ex.getMessage(), request);
         return ResponseEntity.status(ex.getStatus()).body(problem);
+    }
+
+    /**
+     * Dos personas modificaron lo mismo a la vez y una perdió.
+     *
+     * <p>No es un error del cliente ni del servidor: es que el estado cambió debajo. Se
+     * responde 409 con un texto que el cliente pueda enseñar tal cual, porque la acción que
+     * corresponde —recargar y volver a mirar— la tiene que hacer la persona, no el programa.
+     *
+     * <p>Va aquí y no en cada servicio porque el bloqueo optimista salta al volcar los
+     * cambios, lejos del método que los hizo.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
+                                                              HttpServletRequest request) {
+        log.debug("Colisión de bloqueo optimista en {}", request.getRequestURI(), ex);
+        ProblemDetail problem = ProblemDetails.of(HttpStatus.CONFLICT, "Conflicto con el estado actual",
+                "Otro miembro del hogar actualizó este producto mientras lo editabas. "
+                        + "Recarga para ver cómo quedó y vuelve a intentarlo.", request);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
     /** Fallo de autenticación levantado por Spring Security dentro de un controlador. */

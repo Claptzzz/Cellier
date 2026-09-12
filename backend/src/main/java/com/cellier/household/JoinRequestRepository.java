@@ -77,9 +77,10 @@ public interface JoinRequestRepository extends JpaRepository<JoinRequest, UUID> 
     /**
      * La misma bandeja, filtrada por estado.
      *
-     * <p>Va en un método aparte en vez de en un {@code (:status is null or ...)} porque un
-     * parámetro de tipo enum comparado con null obliga a instruir a Hibernate sobre el tipo, y
-     * dos consultas legibles valen más que una con anotaciones de tipado.
+     * <p>Va en un método aparte en vez de en un {@code (:status is null or ...)}: ese patrón
+     * falla en tiempo de ejecución sólo cuando el filtro llega vacío. El porqué y la salida
+     * están en {@code docs/reglas-esquema.md}, sección «Un parámetro comparado con null en
+     * JPQL no tiene tipo».
      */
     @Query("""
             select new com.cellier.household.dto.JoinRequestResponse(
