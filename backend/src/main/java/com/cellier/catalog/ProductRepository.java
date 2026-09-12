@@ -45,11 +45,10 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     /**
      * El catálogo filtrado por un texto del nombre, sin distinguir mayúsculas.
      *
-     * <p>Va en un método aparte y no en un {@code (:search is null or …)} por el mismo
-     * motivo que la bandeja de solicitudes: un parámetro comparado con null no tiene tipo
-     * que Hibernate pueda inferir, lo manda como {@code bytea} y PostgreSQL responde
-     * «function lower(bytea) does not exist». Dos consultas legibles valen más que una con
-     * anotaciones de tipado.
+     * <p>Va en un método aparte y no en un {@code (:search is null or …)}: ese patrón falla
+     * en tiempo de ejecución sólo cuando el filtro llega vacío. El porqué y la salida están
+     * en {@code docs/reglas-esquema.md}, sección «Un parámetro comparado con null en JPQL no
+     * tiene tipo».
      */
     @Query("""
             select new com.cellier.catalog.dto.ProductResponse(p.id, p.name, p.unit, p.category)

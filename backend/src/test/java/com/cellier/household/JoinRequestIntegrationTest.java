@@ -131,6 +131,7 @@ class JoinRequestIntegrationTest {
             mockMvc.perform(get("/api/v1/households/" + hogar).header(HttpHeaders.AUTHORIZATION, "Bearer " + bruno))
                     .andExpect(status().isNotFound());
             mockMvc.perform(get("/api/v1/households").header(HttpHeaders.AUTHORIZATION, "Bearer " + bruno))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
         }
 
@@ -533,6 +534,7 @@ class JoinRequestIntegrationTest {
 
             // Carla no ve las de Bruno.
             mockMvc.perform(get("/api/v1/join-requests/mine").header(HttpHeaders.AUTHORIZATION, "Bearer " + carla))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
         }
 
@@ -563,6 +565,7 @@ class JoinRequestIntegrationTest {
 
             mockMvc.perform(get(rutaBandeja() + "?status=REJECTED")
                             .header(HttpHeaders.AUTHORIZATION, "Bearer " + ana))
+                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(1))
                     .andExpect(jsonPath("$[0].status").value("REJECTED"));
         }
