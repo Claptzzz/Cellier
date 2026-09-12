@@ -40,6 +40,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ProblemDetail> handleApiException(ApiException ex, HttpServletRequest request) {
         ProblemDetail problem = ProblemDetails.of(ex.getStatus(), ex.getTitle(), ex.getMessage(), request);
+        ex.getProperties().forEach(problem::setProperty);
         return ResponseEntity.status(ex.getStatus()).body(problem);
     }
 

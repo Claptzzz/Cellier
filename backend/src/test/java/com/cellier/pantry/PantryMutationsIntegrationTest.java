@@ -1,6 +1,7 @@
 package com.cellier.pantry;
 
 import com.cellier.PostgresTestcontainerConfig;
+import com.cellier.household.domain.HouseholdMember;
 import com.cellier.catalog.ProductRepository;
 import com.cellier.household.HouseholdMemberRepository;
 import com.cellier.household.HouseholdRepository;
@@ -391,6 +392,110 @@ class PantryMutationsIntegrationTest {
     // ---------------------------------------------------------------------------------
 
     @Nested
+    @DisplayName("Escritura rancia")
+    class EscrituraRancia {
+
+        /**
+         * El caso que de verdad ocurre: Ana abre la despensa en el súper, Bruno descuenta en
+         * casa, y Ana guarda lo que tenía en pantalla.
+         *
+         * <p>Sin mandar la versión leída, el PATCH aplicaría 12 sobre un artículo que ya vale
+         * otra cosa y el cambio de Bruno desaparecería sin que nadie se entere: {@code @Version}
+         * por sí solo sólo caza dos transacciones en el mismo instante. Con ella, la escritura
+         * se rechaza.
+         *
+         * <p>Y el 409 tiene que ser accionable: trae la versión y la cantidad de ahora, para
+         * que la pantalla pueda decir en qué quedó sin una segunda petición.
+         */
+        @Test
+        @DisplayName("editar con la versión que leíste, después de que otro escribiera, da 409")
+        void versionVieja() throws Exception {
+            UUID item = idDe(anadirPorNombre(ana, casaRivas, "Huevos", "UNIT", "12")
+                    .andExpect(status().isCreated()));
+            long versionQueVioAna = json(editar(ana, casaRivas, item, Map.of("parLevel", "18"))
+                    .andExpect(status().isOk())).get("version").asLong();
+
+            hacerMiembro(bruno, casaRivas);
+            mockMvc.perform(post(ruta(casaRivas) + "/" + item + ":consume")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + bruno)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"quantity":8}"""))
+                    .andExpect(status().isOk());
+
+            editar(ana, casaRivas, item,
+                    Map.of("version", versionQueVioAna, "quantity", "12"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.detail").value(
+                            "Otro miembro del hogar cambió este producto mientras lo editabas. "
+                                    + "Ahora hay 4. Revisa cómo quedó y vuelve a intentarlo."))
+                    .andExpect(jsonPath("$.currentVersion").value(versionQueVioAna + 1))
+                    .andExpect(jsonPath("$.currentQuantity").value(4.000));
+
+            // Y lo que importa: el descuento de Bruno sigue ahí.
+            assertThat(items.findById(item).orElseThrow().getQuantity()).isEqualByComparingTo("4.000");
+        }
+
+        @Test
+        @DisplayName("con la versión al día, la edición pasa y la versión avanza")
+        void versionAlDia() throws Exception {
+            UUID item = idDe(anadirPorNombre(ana, casaRivas, "Huevos", "UNIT", "12")
+                    .andExpect(status().isCreated()));
+
+            editar(ana, casaRivas, item, Map.of("version", 0, "quantity", "9"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.quantity").value(9.000))
+                    .andExpect(jsonPath("$.version").value(1));
+        }
+
+        /**
+         * Omitirla mantiene el comportamiento de siempre. Es lo que permite añadir la
+         * comprobación sin romper a ningún cliente que ya llame a este endpoint.
+         */
+        @Test
+        @DisplayName("sin mandar versión, la edición se aplica sobre lo que haya")
+        void sinVersion() throws Exception {
+            UUID item = idDe(anadirPorNombre(ana, casaRivas, "Huevos", "UNIT", "12")
+                    .andExpect(status().isCreated()));
+            editar(ana, casaRivas, item, Map.of("parLevel", "18")).andExpect(status().isOk());
+
+            editar(ana, casaRivas, item, Map.of("quantity", "9"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.quantity").value(9.000));
+        }
+
+        /**
+         * Gastar y reponer son deltas relativos: componen bien en cualquier orden, así que no
+         * hay nada rancio que detectar. Exigirles versión los haría fallar sin motivo.
+         */
+        @Test
+        @DisplayName("consumir no acepta versión: es un delta, no un valor absoluto")
+        void consumoNoLlevaVersion() throws Exception {
+            UUID item = idDe(anadirPorNombre(ana, casaRivas, "Huevos", "UNIT", "12")
+                    .andExpect(status().isCreated()));
+
+            // Aunque se cuele el campo, se ignora: el consumo no depende de lo que se leyó.
+            mockMvc.perform(post(ruta(casaRivas) + "/" + item + ":consume")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + ana)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"quantity":3,"version":99}"""))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.quantity").value(9.000));
+        }
+
+        @Test
+        @DisplayName("una versión negativa es un dato inválido, no un conflicto")
+        void versionNegativa() throws Exception {
+            UUID item = idDe(anadirPorNombre(ana, casaRivas, "Huevos", "UNIT", "12")
+                    .andExpect(status().isCreated()));
+
+            editar(ana, casaRivas, item, Map.of("version", -1, "quantity", "9"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
     @DisplayName("Concurrencia")
     class Concurrencia {
 
@@ -566,6 +671,16 @@ class PantryMutationsIntegrationTest {
         return movimientosDe(itemId).stream()
                 .map(StockMovement::getDelta)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Mete a alguien en el hogar sin pasar por el ciclo de solicitud, que aquí no es el tema. */
+    private void hacerMiembro(String token, UUID householdId) {
+        String email = token.equals(bruno) ? "bruno.soto@gmail.com" : "ana.rivas@gmail.com";
+        members.save(HouseholdMember.member(
+                households.findById(householdId).orElseThrow(),
+                users.findAll().stream()
+                        .filter((u) -> u.getEmail().equalsIgnoreCase(email))
+                        .findFirst().orElseThrow()));
     }
 
     private void autenticarEnEsteHilo() {
