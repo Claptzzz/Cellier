@@ -81,18 +81,22 @@ const AMBIGUOUS = /[0O1IL]/;
           </p>
         </header>
 
-        @if (pendingCount() > 0) {
+        @if (requestCount() > 0) {
           <a
             routerLink="/onboarding/pending"
-            class="mx-auto mb-6 flex items-center gap-2 rounded-md border border-border
-                   bg-surface-raised px-3 py-2 text-[14px] text-text
+            class="mx-auto mb-6 flex min-h-[var(--touch-min)] items-center gap-2 rounded-md
+                   border border-border bg-surface-raised px-3 py-2 text-[14px] text-text
                    transition-colors hover:border-border-strong
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
             <span class="text-text-muted"><ui-icon name="hourglass-medium" [size]="16" /></span>
             <span>
-              {{ pendingCount() === 1
-                ? 'Tienes una solicitud esperando respuesta'
-                : 'Tienes ' + pendingCount() + ' solicitudes esperando respuesta' }}
+              @if (pendingCount() > 0) {
+                {{ pendingCount() === 1
+                  ? 'Tienes una solicitud esperando respuesta'
+                  : 'Tienes ' + pendingCount() + ' solicitudes esperando respuesta' }}
+              } @else {
+                Ver tus solicitudes
+              }
             </span>
           </a>
         }
@@ -209,7 +213,22 @@ export class OnboardingPage {
   protected readonly hasHouseholds = this.context.hasHouseholds;
   protected readonly pendingCount = computed(() => this.myRequests.pending().length);
 
+  /**
+   * Cuántas solicitudes hay en total, de cualquier estado. El enlace a la sala de espera
+   * se muestra por esto y no sólo por las pendientes: quien ya recibió respuesta también
+   * tiene algo que consultar ahí, y con la condición anterior esa pantalla no tenía
+   * ningún camino que llevara a ella.
+   */
+  protected readonly requestCount = computed(() => this.myRequests.requests().length);
+
   protected readonly codeIsValid = computed(() => JOIN_CODE_PATTERN.test(this.code()));
+
+  constructor() {
+    // El arranque sólo carga las solicitudes de quien NO tiene hogares. Quien ya tiene
+    // uno y además pidió entrar en otro también necesita ver el enlace a su sala de
+    // espera, así que aquí se garantiza que estén cargadas.
+    this.myRequests.ensureLoaded().subscribe();
+  }
 
   protected readonly codeHint = computed(() => {
     const written = this.code().length;

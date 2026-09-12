@@ -6,6 +6,7 @@ import { AuthService } from '../core/auth/auth.service';
 import { HouseholdContextService } from '../core/household/household-context.service';
 import { PendingApprovalsService } from '../core/household/pending-approvals.service';
 import { Icon } from '../shared/ui/icon';
+import { AccountMenu } from './account-menu';
 import { HouseholdSwitcher } from './household-switcher';
 import { NAV_DESTINATIONS, SETTINGS_DESTINATION } from './nav';
 import { ThemeToggle } from './theme-toggle';
@@ -32,10 +33,14 @@ const EXTRA_SECTIONS: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive,
-    Icon, ThemeToggle, HouseholdSwitcher,
+    AccountMenu, Icon, ThemeToggle, HouseholdSwitcher,
   ],
   template: `
     <div class="flex min-h-dvh flex-col bg-surface lg:flex-row">
+
+      <!-- Primer elemento tabulable: quien navega con teclado no tiene que recorrer toda
+           la navegación en cada pantalla para llegar al contenido. -->
+      <a href="#contenido" class="skip-link">Saltar al contenido</a>
 
       <!-- ============ SIDEBAR (≥1024px) ============ -->
       <aside
@@ -112,8 +117,12 @@ const EXTRA_SECTIONS: Record<string, string> = {
 
           <!-- En desktop el hogar ya está en el selector del sidebar. Repetirlo aquí
                sería información duplicada, así que el header nombra la sección actual,
-               que es lo que el sidebar no dice de forma prominente. -->
-          <div class="hidden min-w-0 flex-1 lg:block">
+               que es lo que el sidebar no dice de forma prominente.
+
+               El h1 existe en los dos anchos: en móvil sólo se oculta a la vista. Sin él
+               la página no tenía encabezado de nivel 1 por debajo de 1024px, y el esquema
+               de encabezados empezaba en h2. -->
+          <div class="min-w-0 flex-1 max-lg:sr-only lg:block">
             <h1 class="truncate font-display text-[17px] font-semibold tracking-tight text-text">
               {{ sectionTitle() }}
             </h1>
@@ -121,21 +130,12 @@ const EXTRA_SECTIONS: Record<string, string> = {
 
           <app-theme-toggle />
 
-          <button
-            type="button"
-            class="flex min-h-[var(--touch-min)] min-w-[var(--touch-min)] items-center
-                   justify-center rounded-sm transition-colors hover:bg-surface-sunken
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            [attr.aria-label]="'Cuenta de ' + (auth.displayName() || 'invitado')">
-            <span
-              class="flex h-8 w-8 items-center justify-center rounded-full
-                     bg-accent-weak text-[12px] font-semibold text-accent">
-              {{ auth.initials() || 'C' }}
-            </span>
-          </button>
+          <app-account-menu />
         </header>
 
         <main
+          id="contenido"
+          tabindex="-1"
           class="flex min-w-0 flex-1 flex-col px-4 pt-4 lg:px-6 lg:pt-6
                  pb-[calc(var(--bottom-nav-h)+88px+env(safe-area-inset-bottom))]
                  lg:pb-10">
@@ -199,6 +199,28 @@ const EXTRA_SECTIONS: Record<string, string> = {
   `,
   styles: `
     :host { display: block; }
+
+    /* Fuera de la vista hasta que recibe el foco, y entonces por encima de la cabecera
+       pegajosa: un enlace de salto tapado por el propio chasis no sirve de nada. */
+    .skip-link {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 60;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 15px;
+      font-weight: 500;
+      transform: translateY(-200%);
+      transition: transform 150ms;
+    }
+    .skip-link:focus-visible {
+      transform: translateY(0);
+      outline: 2px solid var(--text);
+      outline-offset: 2px;
+    }
 
     .nav-link {
       display: flex;

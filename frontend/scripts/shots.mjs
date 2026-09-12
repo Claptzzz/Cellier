@@ -389,6 +389,44 @@ const MANAGE = [
   { slug: 'manage-loading', miembros: null, solicitudes: null, esperaMs: 400 },
 ];
 
+// ---- Pantalla del hogar y menu de cuenta ----
+// Ambas cierran agujeros de navegacion: la primera es el camino a la gestion, la segunda
+// es el unico acceso a Ajustes en movil y el unico a cerrar sesion en cualquier ancho.
+for (const caso of ['home', 'account-menu']) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(PERFIL_ADMIN));
+      await page.route('**/members', json(MIEMBROS));
+      await page.route('**/join-requests**', json(SOLICITUDES));
+      await page.route(`**/households/${HOUSEHOLD_ID}`, json(DETALLE));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/home`, { waitUntil: 'commit' });
+      await page.waitForTimeout(1100);
+      if (caso === 'account-menu') {
+        await page.getByRole('button', { name: /Cuenta de/ }).filter({ visible: true }).click();
+        await page.waitForTimeout(500);
+      }
+
+      const name = `${caso}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && caso === 'home' });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
 for (const target of MANAGE) {
   for (const [label, vp] of Object.entries(VIEWPORTS)) {
     for (const theme of THEMES) {

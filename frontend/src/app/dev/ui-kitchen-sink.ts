@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { ToastService } from '../core/toast/toast.service';
 import {
-  Badge, BottomSheet, Button, Card, Dialog, EmptyState, Icon, IconButton,
+  Badge, BottomSheet, Button, Card, Dialog, EmptyState, Icon, IconButton, Menu,
   Input, LevelBand, QuantityStepper, Select, Skeleton,
 } from '../shared/ui';
 import type { LevelState } from '../shared/ui';
@@ -26,7 +26,7 @@ interface DemoRow {
   selector: 'app-ui-kitchen-sink',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    Badge, BottomSheet, Button, Card, Dialog, EmptyState, Icon, IconButton,
+    Badge, BottomSheet, Button, Card, Dialog, EmptyState, Icon, IconButton, Menu,
     Input, LevelBand, QuantityStepper, Select, Skeleton,
   ],
   template: `
@@ -257,6 +257,81 @@ interface DemoRow {
         </div>
       </ui-dialog>
 
+      <!-- ====================== AÑADIDOS DEL MÓDULO DE HOGARES ====================== -->
+      <section class="flex flex-col gap-4">
+        <h2 class="font-display text-[20px] font-semibold tracking-tight text-text text-balance">
+          Menu, Button en modo enlace, Input monoespaciado
+        </h2>
+
+        <div class="flex flex-col gap-3">
+          <p class="text-[14px] leading-relaxed text-text-muted [overflow-wrap:anywhere]">
+            <strong class="text-text">Menu</strong> es el panel anclado, equivalente de
+            escritorio de la hoja inferior. Se coloca midiendo el sitio disponible: abierto
+            cerca del borde inferior crece hacia arriba en vez de salirse de la pantalla.
+            Cierra con Escape y al pulsar fuera, y devuelve el foco al disparador.
+          </p>
+
+          <!-- max-w-full y botón a ancho completo: con w-fit a secas el disparador
+               medía 198px dentro de un viewport de 188 (que es lo que quedan de 375 al
+               ampliar al 200%) y empujaba el ancho de toda la página. -->
+          <div class="relative w-fit max-w-full">
+            <ui-button
+              variant="secondary"
+              icon="caret-up-down"
+              [block]="true"
+              (pressed)="menuOpen.set(!menuOpen())">
+              Abrir menú anclado
+            </ui-button>
+            <ui-menu [open]="menuOpen()" label="Ejemplo de menú" (closed)="menuOpen.set(false)">
+              <div class="flex flex-col gap-0.5">
+                <button type="button" class="kitchen-menu-item" (click)="menuOpen.set(false)">
+                  <ui-icon name="check" [size]="18" /><span>Una opción</span>
+                </button>
+                <button type="button" class="kitchen-menu-item" (click)="menuOpen.set(false)">
+                  <ui-icon name="pencil-simple" [size]="18" /><span>Otra opción</span>
+                </button>
+                <button type="button" class="kitchen-menu-item" disabled>
+                  <ui-icon name="trash" [size]="18" /><span>Deshabilitada</span>
+                </button>
+              </div>
+            </ui-menu>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <p class="text-[14px] leading-relaxed text-text-muted [overflow-wrap:anywhere]">
+            <strong class="text-text">Button</strong> con <code class="font-mono [overflow-wrap:anywhere]">link</code>
+            renderiza un <code class="font-mono [overflow-wrap:anywhere]">&lt;a&gt;</code> en vez de un
+            <code class="font-mono [overflow-wrap:anywhere]">&lt;button&gt;</code>: mismo aspecto, semántica correcta.
+            Navegar es seguir un enlace, y con un botón se pierde el anuncio del lector de
+            pantalla y el abrir en otra pestaña.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <ui-button variant="primary" link="/dev/ui">Enlace primario</ui-button>
+            <ui-button variant="secondary" icon="house" link="/dev/ui">Enlace con icono</ui-button>
+            <ui-button variant="ghost" (pressed)="noop()">Botón, para comparar</ui-button>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <p class="text-[14px] leading-relaxed text-text-muted [overflow-wrap:anywhere]">
+            <strong class="text-text">Input</strong> con <code class="font-mono [overflow-wrap:anywhere]">mono</code>
+            para valores que se transcriben carácter a carácter. Mantiene los 16px de
+            <code class="font-mono [overflow-wrap:anywhere]">--text-control</code>: la variante cambia familia y
+            espaciado, nunca el tamaño que evita el auto-zoom de Safari en iOS.
+          </p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <ui-input label="Normal" placeholder="Arroz grano largo" [required]="false" />
+            <ui-input
+              label="Monoespaciado"
+              placeholder="K7M2QP9X"
+              [mono]="true"
+              [required]="false"
+              hint="8 caracteres, sin 0, O, 1, I ni L." />
+          </div>
+        </div>
+      </section>
+
       <ui-bottom-sheet title="Ajustar cantidad" [open]="sheetOpen()" (closed)="sheetOpen.set(false)">
         <div class="flex flex-col gap-4">
           <p class="text-[15px] text-text-muted">Arroz grano largo, en la alacena.</p>
@@ -286,7 +361,26 @@ interface DemoRow {
       </section>
     </div>
   `,
-  styles: `:host { display: block; }`,
+  styles: `
+    :host { display: block; }
+
+    .kitchen-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: var(--touch-min);
+      padding: 0 10px;
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      color: var(--text);
+      text-align: left;
+      transition: background-color 150ms;
+    }
+    .kitchen-menu-item:hover:not(:disabled) { background: var(--surface-sunken); }
+    .kitchen-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .kitchen-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+  `,
 })
 export class UiKitchenSink {
   protected readonly toast = inject(ToastService);
@@ -294,6 +388,11 @@ export class UiKitchenSink {
   protected readonly qty = signal(2);
   protected readonly dialogOpen = signal(false);
   protected readonly sheetOpen = signal(false);
+  protected readonly menuOpen = signal(false);
+
+  protected noop(): void {
+    // El botón de comparación no hace nada: está para verlo junto al enlace.
+  }
 
   protected readonly tokens = [
     { name: '--surface', use: 'Fondo de página' },

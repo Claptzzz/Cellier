@@ -110,6 +110,11 @@ export class Button {
   protected readonly classes = computed(() =>
     [
       'inline-flex items-center justify-center rounded-md font-medium',
+      // Sin max-w-full un boton con etiqueta larga se dimensiona por su contenido y
+      // desborda el contenedor: el truncate de la etiqueta nunca llega a aplicarse
+      // porque el boton crece en vez de encoger. Se ve al ampliar al 200%, donde 375
+      // se quedan en 188.
+      'max-w-full',
       'transition-[filter,background-color,transform] duration-150',
       'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
       // Empuje físico al pulsar. Sólo transform, nunca layout.

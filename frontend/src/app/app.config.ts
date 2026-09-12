@@ -5,6 +5,9 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeEsCL from '@angular/common/locales/es-CL';
+import { LOCALE_ID } from '@angular/core';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
 import { firstValueFrom, of, switchMap } from 'rxjs';
 
@@ -44,8 +47,15 @@ function loadSessionBeforeRouting() {
   );
 }
 
+/**
+ * Sin esto, `DatePipe` cae en `en-US` y una aplicación entera en español escribe
+ * "28 Aug 2026". El idioma de la interfaz no se hereda del `lang` del documento.
+ */
+registerLocaleData(localeEsCL);
+
 export const appConfig: ApplicationConfig = {
   providers: [
+    { provide: LOCALE_ID, useValue: 'es-CL' },
     provideBrowserGlobalErrorListeners(),
     provideAppInitializer(loadSessionBeforeRouting),
     provideHttpClient(

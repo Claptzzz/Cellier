@@ -9,10 +9,15 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (avatarUrl(); as url) {
+      <!-- width/height explícitos: sin ellos el hueco no existe hasta que la imagen
+           llega, y la fila entera salta al terminar de cargar. -->
       <img
         [src]="url"
         alt=""
         aria-hidden="true"
+        width="40"
+        height="40"
+        loading="lazy"
         referrerpolicy="no-referrer"
         class="h-10 w-10 flex-none rounded-full object-cover" />
     } @else {
