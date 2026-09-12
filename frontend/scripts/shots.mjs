@@ -11,9 +11,14 @@ mkdirSync(OUT, { recursive: true });
 
 const VIEWPORTS = { '375': { width: 375, height: 812 }, '1440': { width: 1440, height: 900 } };
 const THEMES = ['light', 'dark'];
+// El hogar vive en la URL desde el Incremento 3, asi que las rutas de seccion
+// llevan su id. `/pantry` sigue existiendo como redireccion desde las URLs
+// antiguas, pero aqui se apunta al destino real para no capturar un rebote.
+const HOUSEHOLD_ID = '8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98';
+
 const PAGES = [
   { slug: 'login', path: '/login', auth: false },
-  { slug: 'shell-pantry', path: '/pantry', auth: true },
+  { slug: 'shell-pantry', path: `/h/${HOUSEHOLD_ID}/pantry`, auth: true },
   { slug: 'dev-ui', path: '/dev/ui', auth: true },
 ];
 
@@ -25,6 +30,12 @@ const PROFILE = {
   locale: 'es-CL',
   themePreference: 'SYSTEM',
   createdAt: '2026-08-24T20:15:30Z',
+  // El perfil trae los hogares del usuario. Sin ellos el guard mandaria a
+  // /onboarding y las capturas del chasis saldrian de la pantalla equivocada.
+  households: [
+    { id: HOUSEHOLD_ID, name: 'Casa Rivas', role: 'ADMIN', memberCount: 4 },
+    { id: 'b41d0f77-6c58-4e92-8a03-5fd91c2e7a64', name: 'Depa Ñuñoa', role: 'MEMBER', memberCount: 2 },
+  ],
 };
 
 const browser = await chromium.launch();
@@ -157,6 +168,297 @@ for (const theme of THEMES) {
   await page.screenshot({ path: OUT + 'fab-clearance-375-light.png' });
   results.push({ name: 'fab-clearance-375-light.png', geometry });
   await context.close();
+}
+
+// ---- Onboarding: los dos caminos, el codigo recien creado y la sala de espera ----
+// Cada pantalla necesita un backend distinto, asi que no encajan en el bucle de PAGES.
+const SIN_HOGARES = { ...PROFILE, households: [] };
+const CREADO = {
+  id: HOUSEHOLD_ID, name: 'Casa Rivas', joinCode: 'K7M2QP9X',
+  role: 'ADMIN', memberCount: 1, createdAt: '2026-09-04T09:15:02Z',
+};
+const MIS_SOLICITUDES = [
+  { id: 's1', householdId: HOUSEHOLD_ID, householdName: 'Casa Rivas',
+    status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z', resolvedAt: null },
+  { id: 's2', householdId: 'b41d0f77-6c58-4e92-8a03-5fd91c2e7a64', householdName: 'Depa \u00d1u\u00f1oa',
+    status: 'APPROVED', requestedAt: '2026-09-02T18:40:00Z', resolvedAt: '2026-09-03T08:12:00Z' },
+  { id: 's3', householdId: 'c72e1a55-1111-4a22-9b33-4c5d6e7f8090', householdName: 'Casa de la playa',
+    status: 'REJECTED', requestedAt: '2026-08-28T20:41:17Z', resolvedAt: '2026-08-29T08:03:55Z' },
+];
+
+const json = (body) => (r) =>
+  r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+const ONBOARDING = [
+  { slug: 'onboarding', path: '/onboarding', perfil: SIN_HOGARES,
+    rutas: [['**/api/v1/join-requests/mine', json([])]] },
+  {
+    slug: 'onboarding-created', path: '/onboarding', perfil: SIN_HOGARES,
+    rutas: [
+      ['**/api/v1/join-requests/mine', json([])],
+      ['**/api/v1/households', (r) => (r.request().method() === 'POST' ? json(CREADO)(r) : json([])(r))],
+    ],
+    // El codigo solo aparece despues de crear: hay que crear.
+    async interactuar(page) {
+      await page.getByLabel('Nombre del hogar').fill('Casa Rivas');
+      await page.getByRole('button', { name: 'Crear hogar' }).click();
+      await page.getByText('K7M2QP9X').waitFor({ timeout: 5000 });
+    },
+  },
+  {
+    // Con navigator.share disponible. Chromium de escritorio NO lo expone, asi que sin
+    // este caso la rama de compartir no se veria en ninguna captura.
+    slug: 'onboarding-created-share', path: '/onboarding', perfil: SIN_HOGARES,
+    conShare: true,
+    rutas: [
+      ['**/api/v1/join-requests/mine', json([])],
+      ['**/api/v1/households', (r) => (r.request().method() === 'POST' ? json(CREADO)(r) : json([])(r))],
+    ],
+    async interactuar(page) {
+      await page.getByLabel('Nombre del hogar').fill('Casa Rivas');
+      await page.getByRole('button', { name: 'Crear hogar' }).click();
+      await page.getByText('K7M2QP9X').waitFor({ timeout: 5000 });
+    },
+  },
+  { slug: 'onboarding-pending', path: '/onboarding/pending', perfil: SIN_HOGARES,
+    rutas: [['**/api/v1/join-requests/mine', json(MIS_SOLICITUDES)]] },
+  { slug: 'onboarding-pending-empty', path: '/onboarding/pending', perfil: SIN_HOGARES,
+    rutas: [['**/api/v1/join-requests/mine', json([])]] },
+  {
+    slug: 'onboarding-pending-loading', path: '/onboarding/pending', perfil: SIN_HOGARES,
+    // Respuesta que no llega dentro de la ventana de captura: asi se fotografia el
+    // esqueleto, que es lo que ve alguien con una conexion lenta.
+    rutas: [['**/api/v1/join-requests/mine', () => {}]],
+    esperaMs: 900,
+  },
+];
+
+// ---- Selector de hogar y distintivo de pendientes ----
+const CON_PENDIENTES = [
+  { id: 'r1', userId: 'u9', displayName: 'Camila Soto', email: 'camila@example.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z',
+    resolvedAt: null, resolvedByUserId: null },
+  { id: 'r2', userId: 'u8', displayName: 'Diego Paz', email: 'diego@example.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-05T18:02:00Z',
+    resolvedAt: null, resolvedByUserId: null },
+];
+
+for (const abierto of [false, true]) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(PROFILE));
+      await page.route('**/join-requests**', json(CON_PENDIENTES));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
+      await page.waitForTimeout(900);
+      if (abierto) {
+        // El chasis monta DOS selectores (barra lateral y cabecera) y oculta uno por CSS
+        // segun el ancho. Se comprueba que solo uno sea visible: si los dos lo fueran,
+        // habria dos disparadores del mismo control en la misma pantalla.
+        const disparadores = page.getByRole('button', { name: /Hogar activo/ });
+        const visibles = await disparadores.evaluateAll(
+          (nodos) => nodos.filter((n) => n.checkVisibility()).length);
+        if (visibles !== 1) {
+          throw new Error(`Se esperaba 1 selector visible en ${label}px, hay ${visibles}`);
+        }
+
+        await disparadores.filter({ visible: true }).click();
+        await page.waitForTimeout(600);
+
+        // Comprobacion explicita en vez de esperar por un selector: el chasis monta los
+        // dos contenedores y solo uno se muestra, asi que lo que importa es que haya
+        // exactamente UN panel visible, no que exista alguno.
+        const panelesVisibles = await page.evaluate(() =>
+          [...document.querySelectorAll('.ui-menu-panel, dialog.ui-sheet')]
+            .filter((n) => n.checkVisibility()).length);
+        if (panelesVisibles !== 1) {
+          throw new Error(`Se esperaba 1 panel visible en ${label}px, hay ${panelesVisibles}`);
+        }
+      }
+
+      const name = `switcher-${abierto ? 'open' : 'closed'}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
+for (const target of ONBOARDING) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(target.perfil));
+      for (const [patron, handler] of target.rutas ?? []) {
+        await page.route(patron, handler);
+      }
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+      if (target.conShare) {
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'share', { value: async () => {}, configurable: true });
+        });
+      }
+
+      await page.goto(BASE + target.path, { waitUntil: 'commit' });
+      await page.waitForTimeout(target.esperaMs ?? 800);
+      if (target.interactuar) await target.interactuar(page);
+      await page.waitForTimeout(250);
+
+      const name = `${target.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
+// ---- Administrar el hogar ----
+const MIEMBROS = [
+  { userId: 'u0', displayName: 'Ana Rivas', email: 'ana.rivas@gmail.com', avatarUrl: null,
+    role: 'ADMIN', joinedAt: '2026-08-24T20:15:30Z' },
+  { userId: 'u1', displayName: 'Camila Soto', email: 'camila.soto@gmail.com', avatarUrl: null,
+    role: 'MEMBER', joinedAt: '2026-09-01T10:00:00Z' },
+  { userId: 'u2', displayName: 'Diego Paz', email: 'diego.paz@gmail.com', avatarUrl: null,
+    role: 'ADMIN', joinedAt: '2026-09-02T11:30:00Z' },
+];
+const SOLICITUDES = [
+  { id: 'r1', userId: 'u9', displayName: 'Camila Soto', email: 'camila.otra@gmail.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z',
+    resolvedAt: null, resolvedByUserId: null },
+  { id: 'r2', userId: 'u8', displayName: 'Diego Paz', email: 'diego.otro@gmail.com',
+    avatarUrl: null, status: 'PENDING', requestedAt: '2026-09-05T18:02:00Z',
+    resolvedAt: null, resolvedByUserId: null },
+];
+const DETALLE = {
+  id: HOUSEHOLD_ID, name: 'Casa Rivas', joinCode: 'K7M2QP9X',
+  role: 'ADMIN', memberCount: 3, createdAt: '2026-09-01T10:00:00Z',
+};
+const PERFIL_ADMIN = {
+  ...PROFILE,
+  id: 'u0',
+  // El recuento del perfil tiene que cuadrar con la lista que devuelve el mock: una
+  // captura que dice "4 miembros" sobre una lista de 3 se contradice sola.
+  households: PROFILE.households.map((h) =>
+    h.id === HOUSEHOLD_ID ? { ...h, memberCount: 3 } : h),
+};
+
+const MANAGE = [
+  { slug: 'manage', miembros: MIEMBROS, solicitudes: SOLICITUDES },
+  {
+    // Hogar recien creado: sin solicitudes y con una sola persona dentro.
+    slug: 'manage-empty', miembros: [MIEMBROS[0]], solicitudes: [],
+  },
+  {
+    slug: 'manage-confirm', miembros: MIEMBROS, solicitudes: SOLICITUDES,
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Acciones sobre Camila Soto' }).click();
+      await page.getByRole('button', { name: 'Expulsar del hogar' }).click();
+      await page.getByText('Expulsar a Camila Soto del hogar').waitFor({ timeout: 5000 });
+    },
+  },
+  {
+    // El unico administrador: acciones deshabilitadas y el motivo a la vista.
+    slug: 'manage-last-admin', miembros: [MIEMBROS[0], MIEMBROS[1]], solicitudes: [],
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Acciones sobre Ana Rivas' }).click();
+      await page.getByText('conservar al menos un administrador').waitFor({ timeout: 5000 });
+    },
+  },
+  { slug: 'manage-loading', miembros: null, solicitudes: null, esperaMs: 400 },
+];
+
+// ---- Pantalla del hogar y menu de cuenta ----
+// Ambas cierran agujeros de navegacion: la primera es el camino a la gestion, la segunda
+// es el unico acceso a Ajustes en movil y el unico a cerrar sesion en cualquier ancho.
+for (const caso of ['home', 'account-menu']) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(PERFIL_ADMIN));
+      await page.route('**/members', json(MIEMBROS));
+      await page.route('**/join-requests**', json(SOLICITUDES));
+      await page.route(`**/households/${HOUSEHOLD_ID}`, json(DETALLE));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/home`, { waitUntil: 'commit' });
+      await page.waitForTimeout(1100);
+      if (caso === 'account-menu') {
+        await page.getByRole('button', { name: /Cuenta de/ }).filter({ visible: true }).click();
+        await page.waitForTimeout(500);
+      }
+
+      const name = `${caso}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && caso === 'home' });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
+for (const target of MANAGE) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 2,
+        colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/v1/me', json(PERFIL_ADMIN));
+      const colgada = () => {};
+      await page.route('**/members', target.miembros ? json(target.miembros) : colgada);
+      await page.route('**/join-requests**', target.solicitudes ? json(target.solicitudes) : colgada);
+      await page.route(`**/households/${HOUSEHOLD_ID}`, target.miembros ? json(DETALLE) : colgada);
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/manage`, { waitUntil: 'commit' });
+      await page.waitForTimeout(target.esperaMs ?? 1100);
+      if (target.interactuar) await target.interactuar(page);
+      await page.waitForTimeout(350);
+
+      const name = `${target.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !target.interactuar });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
 }
 
 await browser.close();

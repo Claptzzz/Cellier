@@ -20,6 +20,19 @@ const ICONS = [
   // frente a circulo con aspa (danger) frente a marca de verificacion sin
   // contorno (ok). Asi el estado se lee sin depender del tono.
   'x-circle',
+  // Modulo de hogares (Incremento 3). Se anaden juntos para no regenerar este
+  // archivo una vez por pantalla.
+  'copy',              // copiar el codigo de invitacion
+  'share-network',     // compartir nativo, con navigator.share
+  'arrows-clockwise',  // regenerar el codigo
+  'users',             // miembros del hogar
+  'user-plus',         // unirse / invitar
+  'user-minus',        // expulsar
+  'shield-check',      // rol de administrador
+  'sign-in',           // entrar en un hogar existente
+  'check-circle',      // aprobar una solicitud
+  'prohibit',          // rechazar una solicitud
+  'hourglass-medium',  // solicitud a la espera de respuesta
 ];
 
 const entries = ICONS.map((name) => {

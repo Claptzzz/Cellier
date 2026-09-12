@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
 import { AuthService } from '../core/auth/auth.service';
+import { HouseholdContextService } from '../core/household/household-context.service';
+import { PendingApprovalsService } from '../core/household/pending-approvals.service';
 import { Icon } from '../shared/ui/icon';
-import { ToastHost } from '../shared/ui/toast-host';
+import { AccountMenu } from './account-menu';
 import { HouseholdSwitcher } from './household-switcher';
 import { NAV_DESTINATIONS, SETTINGS_DESTINATION } from './nav';
 import { ThemeToggle } from './theme-toggle';
@@ -21,15 +23,24 @@ import { ThemeToggle } from './theme-toggle';
  * franja móvil, para que ni la barra ni el botón flotante tapen la última fila
  * de una lista.
  */
+/** Secciones con pantalla propia que no son destinos de la navegación. */
+const EXTRA_SECTIONS: Record<string, string> = {
+  manage: 'Administrar hogar',
+};
+
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive,
-    Icon, ThemeToggle, HouseholdSwitcher, ToastHost,
+    AccountMenu, Icon, ThemeToggle, HouseholdSwitcher,
   ],
   template: `
     <div class="flex min-h-dvh flex-col bg-surface lg:flex-row">
+
+      <!-- Primer elemento tabulable: quien navega con teclado no tiene que recorrer toda
+           la navegación en cada pantalla para llegar al contenido. -->
+      <a href="#contenido" class="skip-link">Saltar al contenido</a>
 
       <!-- ============ SIDEBAR (≥1024px) ============ -->
       <aside
@@ -43,21 +54,30 @@ import { ThemeToggle } from './theme-toggle';
         </div>
 
         <div class="px-3 pb-3">
-          <app-household-switcher [name]="householdName" [memberCount]="householdMembers" />
+          <app-household-switcher
+            [households]="households()"
+            [activeId]="activeHouseholdId()"
+            (selected)="switchHousehold($event)"
+            (joinAnother)="goToOnboarding()" />
         </div>
 
         <nav class="flex-1 px-2" aria-label="Secciones">
           <ul class="flex flex-col gap-0.5">
-            @for (item of destinations; track item.path) {
+            @for (item of destinations; track item.segment) {
               <li>
                 <a
-                  [routerLink]="item.path"
+                  [routerLink]="linkTo(item.segment)"
                   routerLinkActive="is-active"
                   class="nav-link"
                   #rla="routerLinkActive"
                   [attr.aria-current]="rla.isActive ? 'page' : null">
                   <ui-icon [name]="item.icon" [size]="20" />
-                  <span>{{ item.label }}</span>
+                  <span class="flex-1">{{ item.label }}</span>
+                  @if (item.segment === 'home' && pendingApprovals() !== null) {
+                    <span class="nav-count" [attr.aria-label]="pendingLabel()">
+                      {{ pendingApprovals() }}
+                    </span>
+                  }
                 </a>
               </li>
             }
@@ -87,13 +107,22 @@ import { ThemeToggle } from './theme-toggle';
 
           <!-- El selector de hogar sólo aparece en el header cuando no hay sidebar -->
           <div class="min-w-0 flex-1 overflow-hidden lg:hidden">
-            <app-household-switcher [name]="householdName" [compact]="true" />
+            <app-household-switcher
+              [households]="households()"
+              [activeId]="activeHouseholdId()"
+              [compact]="true"
+              (selected)="switchHousehold($event)"
+              (joinAnother)="goToOnboarding()" />
           </div>
 
           <!-- En desktop el hogar ya está en el selector del sidebar. Repetirlo aquí
                sería información duplicada, así que el header nombra la sección actual,
-               que es lo que el sidebar no dice de forma prominente. -->
-          <div class="hidden min-w-0 flex-1 lg:block">
+               que es lo que el sidebar no dice de forma prominente.
+
+               El h1 existe en los dos anchos: en móvil sólo se oculta a la vista. Sin él
+               la página no tenía encabezado de nivel 1 por debajo de 1024px, y el esquema
+               de encabezados empezaba en h2. -->
+          <div class="min-w-0 flex-1 max-lg:sr-only lg:block">
             <h1 class="truncate font-display text-[17px] font-semibold tracking-tight text-text">
               {{ sectionTitle() }}
             </h1>
@@ -101,21 +130,12 @@ import { ThemeToggle } from './theme-toggle';
 
           <app-theme-toggle />
 
-          <button
-            type="button"
-            class="flex min-h-[var(--touch-min)] min-w-[var(--touch-min)] items-center
-                   justify-center rounded-sm transition-colors hover:bg-surface-sunken
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            [attr.aria-label]="'Cuenta de ' + (auth.displayName() || 'invitado')">
-            <span
-              class="flex h-8 w-8 items-center justify-center rounded-full
-                     bg-accent-weak text-[12px] font-semibold text-accent">
-              {{ auth.initials() || 'C' }}
-            </span>
-          </button>
+          <app-account-menu />
         </header>
 
         <main
+          id="contenido"
+          tabindex="-1"
           class="flex min-w-0 flex-1 flex-col px-4 pt-4 lg:px-6 lg:pt-6
                  pb-[calc(var(--bottom-nav-h)+88px+env(safe-area-inset-bottom))]
                  lg:pb-10">
@@ -130,15 +150,22 @@ import { ThemeToggle } from './theme-toggle';
                pb-[env(safe-area-inset-bottom)]"
         aria-label="Secciones">
         <ul class="mx-auto flex max-w-lg">
-          @for (item of destinations; track item.path) {
+          @for (item of destinations; track item.segment) {
             <li class="min-w-0 flex-1">
               <a
-                [routerLink]="item.path"
+                [routerLink]="linkTo(item.segment)"
                 routerLinkActive="is-active-tab"
                 class="tab-link"
                 #tab="routerLinkActive"
                 [attr.aria-current]="tab.isActive ? 'page' : null">
-                <ui-icon [name]="item.icon" [size]="22" />
+                <span class="relative">
+                  <ui-icon [name]="item.icon" [size]="22" />
+                  @if (item.segment === 'home' && pendingApprovals() !== null) {
+                    <span class="tab-count" [attr.aria-label]="pendingLabel()">
+                      {{ pendingApprovals() }}
+                    </span>
+                  }
+                </span>
                 <span class="w-full truncate px-0.5 text-center text-[11px] leading-none">
                   {{ item.label }}
                 </span>
@@ -150,7 +177,11 @@ import { ThemeToggle } from './theme-toggle';
 
       <!-- ============ ACCIÓN PRINCIPAL (<1024px) ============ -->
       <!-- Se apoya sobre la barra inferior. El <main> reserva su alto más el de
-           la barra, para que nunca tape la última fila de una lista. -->
+           la barra, para que nunca tape la última fila de una lista.
+
+           Sólo en la despensa: es "añadir artículo", y sobre la pantalla de gestión o
+           sobre ajustes era un botón flotante que no significaba nada allí. -->
+      @if (showFab()) {
       <button
         type="button"
         class="fixed right-4 z-40 flex h-14 w-14 items-center justify-center
@@ -163,12 +194,33 @@ import { ThemeToggle } from './theme-toggle';
         aria-label="Añadir artículo">
         <ui-icon name="plus" [size]="24" />
       </button>
-
-      <ui-toast-host />
+      }
     </div>
   `,
   styles: `
     :host { display: block; }
+
+    /* Fuera de la vista hasta que recibe el foco, y entonces por encima de la cabecera
+       pegajosa: un enlace de salto tapado por el propio chasis no sirve de nada. */
+    .skip-link {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 60;
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 15px;
+      font-weight: 500;
+      transform: translateY(-200%);
+      transition: transform 150ms;
+    }
+    .skip-link:focus-visible {
+      transform: translateY(0);
+      outline: 2px solid var(--text);
+      outline-offset: 2px;
+    }
 
     .nav-link {
       display: flex;
@@ -216,19 +268,67 @@ import { ThemeToggle } from './theme-toggle';
       border-radius: 0 0 2px 2px;
     }
     .tab-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+    /* Cuenta de solicitudes por resolver. El número ES el dato: un punto de color solo
+       diría "algo pasa" sin decir cuánto, y además el color no basta (WCAG 1.4.1). */
+    .nav-count {
+      flex: none;
+      min-width: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 20px;
+      text-align: center;
+    }
+
+    .tab-count {
+      position: absolute;
+      top: -6px;
+      left: 12px;
+      min-width: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 18px;
+      text-align: center;
+      /* Anillo del color del fondo de la barra: separa el número del icono sin
+         necesitar un borde que en oscuro se vería como un halo. */
+      box-shadow: 0 0 0 2px var(--surface-raised);
+    }
   `,
 })
-export class AppShell implements OnInit {
+export class AppShell {
   protected readonly auth = inject(AuthService);
+  private readonly household = inject(HouseholdContextService);
+  private readonly pending = inject(PendingApprovalsService);
   private readonly router = inject(Router);
 
   private readonly currentUrl = signal(this.router.url);
 
-  /** Nombre de la sección activa, para el header de desktop. */
+  /**
+   * Nombre de la sección activa, para el header de desktop. Se compara contra el último
+   * segmento y no contra el principio de la URL, porque ahora la sección va detrás del
+   * hogar: `/h/<id>/pantry`.
+   */
   protected readonly sectionTitle = computed(() => {
-    const url = this.currentUrl();
-    const match = [...NAV_DESTINATIONS, SETTINGS_DESTINATION].find((d) => url.startsWith(d.path));
-    return match?.label ?? 'Cellier';
+    const segments = this.currentUrl().split(/[?#]/, 1)[0].split('/').filter(Boolean);
+    const last = segments.at(-1) ?? '';
+    if (last === 'settings') {
+      return SETTINGS_DESTINATION.label;
+    }
+    return (
+      NAV_DESTINATIONS.find((destination) => destination.segment === last)?.label ??
+      // Secciones que no están en la navegación pero sí tienen nombre propio. Sin esto la
+      // cabecera de escritorio rotulaba "Cellier", que no dice dónde estás.
+      EXTRA_SECTIONS[last] ??
+      'Cellier'
+    );
   });
 
   protected readonly destinations = NAV_DESTINATIONS;
@@ -240,16 +340,58 @@ export class AppShell implements OnInit {
       .subscribe((event) => this.currentUrl.set(event.urlAfterRedirects));
   }
 
-  ngOnInit(): void {
-    // Tras una recarga queda el refresh token pero no el perfil: el access token
-    // vive sólo en memoria. Se repuebla aquí; si el access caducó, el
-    // authInterceptor lo renueva de forma transparente.
-    if (this.auth.isAuthenticated() && this.auth.user() === null) {
-      this.auth.loadProfile().subscribe({ next: () => {}, error: () => {} });
-    }
+  // El perfil ya no se carga aquí: lo garantiza authGuard antes de activar la ruta.
+  // Cargarlo en el shell llegaba tarde para las decisiones de hogar, que se toman en el
+  // guard y necesitan la lista de hogares ya poblada.
+
+  protected readonly households = this.household.households;
+
+  /**
+   * Cuál sale marcado en el selector. Fuera de `/h/:householdId` —en Ajustes— no hay hogar
+   * activo, y se rotula con el de arranque para que la navegación siga sabiendo a cuál
+   * volver.
+   */
+  protected readonly activeHouseholdId = computed(() => this.household.shellHousehold()?.id ?? null);
+
+  protected readonly pendingApprovals = this.pending.badgeCount;
+
+  /** El botón flotante pertenece a la despensa; fuera de ella no tiene acción que ofrecer. */
+  protected readonly showFab = computed(() => this.currentSection() === 'pantry');
+
+  protected readonly pendingLabel = computed(() => {
+    const count = this.pendingApprovals();
+    return count === 1
+      ? '1 solicitud de ingreso por resolver'
+      : `${count} solicitudes de ingreso por resolver`;
+  });
+
+  /**
+   * Cambiar de hogar conserva la sección: quien está mirando las recetas de una casa y
+   * cambia a otra quiere ver las recetas de la otra, no volver a la despensa.
+   */
+  protected switchHousehold(householdId: string): void {
+    void this.router.navigate(['/h', householdId, this.currentSection()]);
   }
 
-  // Placeholder hasta el Incremento 3 (household). Datos mock, no esquema.
-  protected readonly householdName = 'Casa Rivas';
-  protected readonly householdMembers = 4;
+  protected goToOnboarding(): void {
+    void this.router.navigate(['/onboarding']);
+  }
+
+  /** La sección de la URL actual, o la despensa si no se reconoce ninguna. */
+  private currentSection(): string {
+    const segments = this.currentUrl().split(/[?#]/, 1)[0].split('/').filter(Boolean);
+    // ['h', '<id>', '<sección>', …]
+    const section = segments.length > 2 ? segments[2] : 'pantry';
+    return NAV_DESTINATIONS.some((d) => d.segment === section) ? section : 'pantry';
+  }
+
+  /**
+   * Enlace a una sección del hogar que rotula el chasis. Devuelve la raíz mientras no haya
+   * hogar, y desde ahí la propia raíz decide adónde ir: así el enlace nunca apunta a
+   * `/h/null/pantry`.
+   */
+  protected linkTo(segment: string): readonly string[] {
+    const id = this.household.shellHousehold()?.id;
+    return id ? ['/h', id, segment] : ['/'];
+  }
 }

@@ -6,6 +6,10 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
+  <!-- Los valores son --surface de cada tema. La barra del navegador en movil pinta
+       este color: sin el, queda un borde claro sobre una aplicacion oscura. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F5F6">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10161B">
   <meta name="description" content="Cellier, la despensa compartida de tu hogar.">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
 
@@ -36,6 +40,54 @@
   </script>
 </head>
 <body>
-  <app-root></app-root>
+  <!--
+    Estado de carga previo al arranque. Angular reemplaza el contenido de
+    <app-root> al montar, asi que esto vive exactamente lo que tarde el arranque.
+
+    Hace falta porque la sesion se carga en un app initializer, que BLOQUEA el
+    primer pintado: sin esto, una red lenta o un backend caido dejan la pagina en
+    blanco sin ninguna explicacion.
+
+    Aparece con 350ms de retraso para que un arranque rapido no produzca un
+    parpadeo. Usa los tokens del tema, que styles.css ya definio, y trae valores
+    de reserva por si la hoja aun no ha llegado.
+  -->
+  <app-root>
+    <div class="app-booting" role="status" aria-live="polite">
+      <div class="app-booting__spinner" aria-hidden="true"></div>
+      <p class="app-booting__text">Cargando Cellier…</p>
+    </div>
+  </app-root>
+
+  <style>
+    .app-booting {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      min-height: 100dvh;
+      background: var(--surface, #F3F5F6);
+      color: var(--text-muted, #5A6B78);
+      font: 15px/1.5 'Geist Variable', system-ui, sans-serif;
+      opacity: 0;
+      animation: app-booting-in 300ms ease 350ms forwards;
+    }
+    .app-booting__spinner {
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--border, #CFD8DE);
+      border-top-color: var(--accent, #0A5FBF);
+      border-radius: 50%;
+      animation: app-booting-spin 700ms linear infinite;
+    }
+    .app-booting__text { margin: 0; }
+    @keyframes app-booting-in { to { opacity: 1; } }
+    @keyframes app-booting-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .app-booting { animation-delay: 350ms; animation-duration: 1ms; }
+      .app-booting__spinner { animation-duration: 2s; }
+    }
+  </style>
 </body>
 </html>

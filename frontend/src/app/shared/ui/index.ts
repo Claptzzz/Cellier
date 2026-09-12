@@ -7,6 +7,7 @@ export { EmptyState } from './empty-state';
 export { Icon } from './icon';
 export { IconButton } from './icon-button';
 export { Input } from './input';
+export { Menu } from './menu';
 export { LevelBand } from './level-band';
 export { QuantityStepper } from './quantity-stepper';
 export { Select } from './select';
