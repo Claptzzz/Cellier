@@ -1,5 +1,6 @@
 package com.cellier.pantry.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.cellier.pantry.domain.StorageLocation;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -26,8 +27,14 @@ public record PantryItemResponse(
 
         @Schema(description = """
                 Cantidad que se considera «tener suficiente». La banda de nivel la usa como
-                denominador: sin ella sólo hay una cifra absoluta, no una proporción.""",
+                denominador: sin ella sólo hay una cifra absoluta, no una proporción.
+
+                **Viaja explícitamente como `null` cuando no hay objetivo**, a diferencia del
+                resto de campos nulos de la API, que se omiten. Es la diferencia entre «no hay
+                objetivo» y «el objetivo es cero»: con la segunda lectura la banda dibujaría
+                una proporción del cero, que es siempre vacío.""",
                 example = "1000.000")
+        @JsonInclude(JsonInclude.Include.ALWAYS)
         BigDecimal parLevel,
 
         @Schema(description = "Dónde se guarda, o null.", example = "PANTRY",

@@ -13,12 +13,18 @@ import com.cellier.pantry.dto.CreatePantryItemRequest;
 import com.cellier.pantry.dto.PantryItemResponse;
 import com.cellier.pantry.dto.PantryProductResponse;
 import com.cellier.pantry.dto.UpdatePantryItemRequest;
+import com.cellier.pantry.dto.PageResponse;
+import com.cellier.pantry.dto.StockMovementResponse;
 import com.cellier.shared.error.ConflictException;
 import com.cellier.shared.error.NotFoundException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -33,6 +39,10 @@ import java.util.UUID;
 public class PantryService {
 
     static final String ITEM_NOT_FOUND = "No existe ese artículo en la despensa de este hogar.";
+
+    /** Tamaño de página del historial si no se pide otro, y tope para el que se pida. */
+    static final int PAGINA_POR_DEFECTO = 20;
+    static final int PAGINA_MAXIMA = 100;
     static final String PRODUCT_NOT_FOUND = "No existe ese producto en este hogar.";
 
     private final PantryItemRepository items;
@@ -51,6 +61,51 @@ public class PantryService {
         this.products = products;
         this.access = access;
         this.currentUserService = currentUserService;
+    }
+
+    /**
+     * La despensa del hogar, filtrada y ordenada <strong>en el servidor</strong>.
+     *
+     * <p>No se pagina: una despensa doméstica es corta y crece despacio. Sí se ordena y se
+     * filtra aquí, para que el cliente no tenga que traerse todo y rehacer el trabajo en
+     * cada pantalla.
+     *
+     * <p>Sale en una sola sentencia. El grafo de entidad del repositorio trae el producto
+     * junto al artículo; sin él, construir cada respuesta pediría su nombre y su unidad por
+     * separado.
+     */
+    @Transactional(readOnly = true)
+    public List<PantryItemResponse> list(UUID householdId, String search, String category, PantrySort sort) {
+        access.requireMember(currentUserId(), householdId);
+
+        Specification<PantryItem> filtro = PantryItemSpecifications.inHousehold(householdId);
+        String texto = blankToNull(search);
+        if (texto != null) {
+            filtro = filtro.and(PantryItemSpecifications.nameContains(texto));
+        }
+        String categoria = blankToNull(category);
+        if (categoria != null) {
+            filtro = filtro.and(PantryItemSpecifications.hasCategory(categoria));
+        }
+
+        return items.findAll(filtro, sort.orden()).stream().map(PantryService::toResponse).toList();
+    }
+
+    /**
+     * El historial de un artículo, de lo más reciente a lo más antiguo.
+     *
+     * <p>Esto sí se pagina, al revés que la despensa: el historial sólo crece, y el de un
+     * producto que se compra cada semana llega a miles de filas en un par de años.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<StockMovementResponse> movements(UUID householdId, UUID itemId, int page, int size) {
+        access.requireMember(currentUserId(), householdId);
+        // El artículo se resuelve dentro del hogar antes de leer nada: de otro modo, el
+        // historial de un artículo ajeno se alcanzaría sabiendo su identificador.
+        requireItem(householdId, itemId);
+
+        int tamano = Math.clamp(size <= 0 ? PAGINA_POR_DEFECTO : size, 1, PAGINA_MAXIMA);
+        return PageResponse.of(movements.findPageFor(itemId, PageRequest.of(Math.max(page, 0), tamano)));
     }
 
     /**
@@ -191,6 +246,40 @@ public class PantryService {
                             + ", o crea un producto con otro nombre.");
         }
         return existing;
+    }
+
+    /** Los órdenes que ofrece el listado, con el criterio de desempate de cada uno. */
+    public enum PantrySort {
+
+        /** Alfabético. El desempate por identificador evita que dos homónimos bailen. */
+        NAME(Sort.by(Sort.Order.asc("product.name"), Sort.Order.asc("id"))),
+
+        /**
+         * De menos a más. Ascendente a propósito: en una despensa lo que se mira es qué se
+         * está acabando, no qué sobra.
+         */
+        QUANTITY(Sort.by(Sort.Order.asc("quantity"), Sort.Order.asc("product.name"))),
+
+        /**
+         * Lo que vence antes, primero. Los artículos sin fecha van al final: no tener
+         * vencimiento no es vencer muy pronto ni muy tarde, es no estar en esa lista.
+         */
+        EXPIRY(Sort.by(Sort.Order.asc("expiresAt").nullsLast(), Sort.Order.asc("product.name")));
+
+        private final Sort orden;
+
+        PantrySort(Sort orden) {
+            this.orden = orden;
+        }
+
+        Sort orden() {
+            return orden;
+        }
+    }
+
+    /** Un filtro en blanco es un filtro que no se envió. */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private PantryItem requireItem(UUID householdId, UUID itemId) {
