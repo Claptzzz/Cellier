@@ -32,6 +32,40 @@ export interface PantryItem {
   readonly version: number;
 }
 
+/** Qué clase de movimiento fue. El signo del delta ya está implícito en el tipo. */
+export type MovementType = 'PURCHASE' | 'CONSUMPTION' | 'ADJUSTMENT';
+
+/** Una línea de la bitácora que explica la cantidad. */
+export interface StockMovement {
+  readonly id: string;
+  readonly type: MovementType;
+  readonly delta: number;
+  readonly performedAt: string;
+  readonly performedByUserId?: string;
+  /** Ausente si quien lo hizo ya no está en el hogar. */
+  readonly performedByName?: string;
+}
+
+/** Una página de resultados, tal cual la devuelve la API. */
+export interface Page<T> {
+  readonly content: readonly T[];
+  readonly page: number;
+  readonly size: number;
+  readonly totalElements: number;
+  readonly totalPages: number;
+}
+
+/** Cómo se llama cada clase de movimiento en pantalla. */
+const MOVEMENT_LABELS: Record<MovementType, string> = {
+  PURCHASE: 'Se agregó',
+  CONSUMPTION: 'Se gastó',
+  ADJUSTMENT: 'Se corrigió',
+};
+
+export function movementLabel(type: MovementType): string {
+  return MOVEMENT_LABELS[type];
+}
+
 /** Abreviatura que se pinta junto a la cantidad. */
 const UNIT_LABELS: Record<ProductUnit, string> = {
   UNIT: 'un',

@@ -585,6 +585,58 @@ const ESCENAS_DESPENSA = [
       await page.waitForTimeout(600);
     },
   },
+  {
+    // El detalle con su bitacora: el estado activo del panel, que es donde se ha roto
+    // dos veces un componente de shared/ui sin que nadie lo viera.
+    slug: 'despensa-detalle',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.route('**/movements**', json({
+        content: [
+          { id: 'm1', type: 'CONSUMPTION', delta: -2, performedAt: '2026-09-13T18:30:00Z',
+            performedByUserId: 'u2', performedByName: 'Bruno Soto' },
+          { id: 'm2', type: 'ADJUSTMENT', delta: 1, performedAt: '2026-09-12T09:05:00Z',
+            performedByUserId: 'u1', performedByName: 'Ana Rivas' },
+          { id: 'm3', type: 'PURCHASE', delta: 12, performedAt: '2026-09-10T20:15:00Z',
+            performedByUserId: 'u1', performedByName: 'Ana Rivas' },
+        ],
+        page: 0, size: 10, totalElements: 3, totalPages: 1,
+      }));
+      await page.getByRole('button', { name: 'Ver Huevos' }).click();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    slug: 'despensa-supermercado',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: /Llegué del súper/ }).click();
+      await page.waitForTimeout(300);
+      await page.locator('dialog[open] input').first().fill('lech');
+      await page.waitForTimeout(250);
+    },
+  },
+  {
+    slug: 'despensa-supermercado-resumen',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: /Llegué del súper/ }).click();
+      await page.waitForTimeout(300);
+      for (const nombre of ['Huevos', 'Lechuga']) {
+        await page.locator('dialog[open] input').first().fill(nombre);
+        await page.waitForTimeout(250);
+        await page.locator('dialog[open] ul button').first().click();
+        await page.waitForTimeout(200);
+        await page.getByRole('button', { name: 'Sumar', exact: true }).click();
+        await page.waitForTimeout(250);
+      }
+      await page.getByRole('button', { name: 'Terminar', exact: true }).click();
+      await page.waitForTimeout(300);
+    },
+  },
   { slug: 'despensa-error', error: true },
 ];
 
@@ -666,6 +718,42 @@ for (const theme of THEMES) {
   await page.screenshot({ path: OUT + name, fullPage: true });
   results.push({ name, note: 'escala de grises' });
   await context.close();
+}
+
+
+// ---- Toasts, que sólo existen cuando ocurren --------------------------------
+// Un componente con estado activo no está verificado hasta que se captura EN ese
+// estado. El toast-host en reposo es un contenedor vacío: lo que hay que mirar es
+// el aviso encima de la pantalla, en los tres tonos y en los dos temas.
+for (const [label, vp] of Object.entries(VIEWPORTS)) {
+  for (const theme of THEMES) {
+    const context = await browser.newContext({
+      viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+    });
+    const page = await context.newPage();
+    await page.route('**/api/**', json([]));
+    await page.route('**/api/v1/me', json(PROFILE));
+    await page.addInitScript((t) => {
+      localStorage.setItem('cellier.theme', t);
+      localStorage.setItem('cellier.refreshToken', 'shot-token');
+    }, theme);
+    await page.goto(`${BASE}/dev/ui`, { waitUntil: 'commit' });
+    await page.waitForTimeout(1000);
+
+    for (const nombre of ['Aviso correcto', 'Aviso de atención', 'Aviso de error']) {
+      await page.getByRole('button', { name: nombre }).click();
+      await page.waitForTimeout(120);
+    }
+    await page.waitForTimeout(300);
+
+    const name = `toasts-${label}-${theme}.png`;
+    await page.screenshot({ path: OUT + name });
+    const overflow = await page.evaluate(() =>
+      document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const visibles = await page.locator('[role="status"], [role="alert"]').count();
+    results.push({ name, overflowPx: overflow, avisos: visibles });
+    await context.close();
+  }
 }
 
 await browser.close();

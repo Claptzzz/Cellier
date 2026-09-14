@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HouseholdContextService } from '../../core/household/household-context.service';
 import { PantryStore } from '../../core/pantry/pantry-store';
 import { ToastService } from '../../core/toast/toast.service';
-import type { PantrySort } from '../../core/pantry/pantry.models';
+import type { PantryItem, PantrySort } from '../../core/pantry/pantry.models';
 import { Button } from '../../shared/ui/button';
 import { EmptyState } from '../../shared/ui/empty-state';
 import { Input } from '../../shared/ui/input';
@@ -14,7 +14,9 @@ import type { SelectOption } from '../../shared/ui/select';
 import type { QuantityChange } from '../../shared/ui/quantity-stepper';
 import { Icon } from '../../shared/ui/icon';
 import { AddItemPanel } from './add-item-panel';
+import { ItemDetailPanel } from './item-detail-panel';
 import { PantryRow } from './pantry-row';
+import { RestockRunPanel } from './restock-run-panel';
 
 const SORT_OPTIONS: readonly SelectOption[] = [
   { value: 'NAME', label: 'Nombre' },
@@ -42,7 +44,8 @@ const SKELETON_ROWS = 6;
   selector: 'app-pantry-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    AddItemPanel, Button, EmptyState, FormsModule, Icon, Input, PantryRow, Select, Skeleton,
+    AddItemPanel, Button, EmptyState, FormsModule, Icon, Input, ItemDetailPanel, PantryRow,
+    RestockRunPanel, Select, Skeleton,
   ],
   template: `
     <!-- Sin gap entre la barra pegada y la lista: el hueco no lo tapa el fondo de la
@@ -89,8 +92,23 @@ const SKELETON_ROWS = 6;
 
         <!-- En escritorio no hay botón flotante —estorbaría con el ratón—, así que la
              acción principal vive aquí, donde ya está la vista puesta. -->
-        <div class="hidden lg:flex lg:justify-end">
-          <ui-button icon="plus" (pressed)="adding.set(true)">Agregar producto</ui-button>
+        <!-- A 375 sólo cabe uno: agregar ya es el botón flotante, así que aquí queda el
+             del súper, a ancho completo. Los dos juntos se salían por la izquierda, que es
+             justo donde la comprobación de desborde no mira. -->
+        <div class="flex justify-end gap-2">
+          @if (store.items().length > 0) {
+            <ui-button
+              variant="secondary"
+              icon="tray"
+              [block]="true"
+              class="flex-1 lg:flex-none"
+              (pressed)="restocking.set(true)">
+              Llegué del súper
+            </ui-button>
+          }
+          <div class="hidden lg:block">
+            <ui-button icon="plus" (pressed)="adding.set(true)">Agregar producto</ui-button>
+          </div>
         </div>
       </div>
       }
@@ -144,7 +162,8 @@ const SKELETON_ROWS = 6;
                   <app-pantry-row
                     [item]="item"
                     [today]="today()"
-                    (changed)="onQuantityChange(item.id, $event)" />
+                    (changed)="onQuantityChange(item.id, $event)"
+                    (opened)="detail.set(item)" />
                 </li>
               }
             </ul>
@@ -168,7 +187,8 @@ const SKELETON_ROWS = 6;
                     <app-pantry-row
                       [item]="item"
                       [today]="today()"
-                      (changed)="onQuantityChange(item.id, $event)" />
+                      (changed)="onQuantityChange(item.id, $event)"
+                      (opened)="detail.set(item)" />
                   </li>
                 }
               </ul>
@@ -202,6 +222,19 @@ const SKELETON_ROWS = 6;
         [householdId]="householdId"
         (closed)="adding.set(false)"
         (added)="onAdded($event)" />
+
+      <app-item-detail-panel
+        [open]="detail() !== null"
+        [householdId]="householdId"
+        [item]="currentDetail()"
+        [today]="today()"
+        (closed)="detail.set(null)" />
+
+      <app-restock-run-panel
+        [open]="restocking()"
+        [items]="store.items()"
+        (restocked)="store.nudge($event.itemId, $event.amount)"
+        (closed)="onRestockDone()" />
     }
   `,
   styles: `:host { display: block; }`,
@@ -213,6 +246,10 @@ export class PantryPage {
   protected readonly householdId = inject(HouseholdContextService).householdId;
 
   protected readonly adding = signal(false);
+  protected readonly restocking = signal(false);
+
+  /** El artículo cuyo detalle se está mirando, o `null` si no hay ninguno. */
+  protected readonly detail = signal<PantryItem | null>(null);
 
   constructor() {
     // El estado vive en un servicio de raíz que sobrevive a la navegación, así que al
@@ -278,6 +315,24 @@ export class PantryPage {
     const total = this.store.gone().length;
     return total === 1 ? '1 artículo' : `${total} artículos`;
   });
+
+  /**
+   * El artículo del detalle, leído de la lista y no de la copia guardada al abrirlo.
+   *
+   * Mientras el panel está abierto la cantidad puede cambiarla otro miembro, o el propio
+   * usuario desde la fila de detrás: el panel tiene que enseñar lo mismo que la lista.
+   */
+  protected readonly currentDetail = computed(() => {
+    const open = this.detail();
+    return open ? this.store.items().find((item) => item.id === open.id) ?? open : null;
+  });
+
+  protected onRestockDone(): void {
+    this.restocking.set(false);
+    // Lo sumado sale por el mismo camino que un toque del stepper, así que puede quedar
+    // esperando su debounce. Al cerrar, va.
+    this.store.flushWrites();
+  }
 
   protected onAdded(name: string): void {
     // Se vuelve a pedir la lista en vez de insertar la fila a mano: el orden lo fija el

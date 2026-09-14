@@ -37,8 +37,19 @@ import type { QuantityChange } from '../../shared/ui/quantity-stepper';
       <!-- Se envuelve: a 375 el stepper no cabe junto al nombre y baja a su propia línea,
            que además es donde el pulgar llega sin recolocar la mano. -->
       <div class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-3">
-        <div class="flex min-w-0 flex-1 basis-[9rem] flex-col gap-1">
-          <p class="truncate text-[15px] font-medium text-text">{{ item().product.name }}</p>
+        <!-- El nombre abre el detalle; el stepper no. Son dos acciones distintas en la
+             misma fila, y anidar un botón dentro de otro las confundiría además de ser
+             HTML inválido. -->
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 basis-[9rem] flex-col items-start gap-1 rounded-sm
+                 py-1 text-left
+                 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          [attr.aria-label]="'Ver ' + item().product.name"
+          (click)="opened.emit()">
+          <span class="w-full truncate text-[15px] font-medium text-text">
+            {{ item().product.name }}
+          </span>
 
           <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             @if (item().product.category; as category) {
@@ -53,7 +64,7 @@ import type { QuantityChange } from '../../shared/ui/quantity-stepper';
               <span class="truncate text-[13px] text-text-muted">Vence {{ fullDate() }}</span>
             }
           </div>
-        </div>
+        </button>
 
         <div class="flex flex-none items-center gap-2">
           <!-- El objetivo, cuando lo hay, y a la izquierda del control para que se lea
@@ -85,6 +96,9 @@ export class PantryRow {
 
   /** Un cambio de cantidad, diciendo si fue un toque o un número escrito. */
   readonly changed = output<QuantityChange>();
+
+  /** Se pidió ver el detalle de este artículo. */
+  readonly opened = output<void>();
 
   protected readonly isGone = computed(() => this.item().quantity <= 0);
 

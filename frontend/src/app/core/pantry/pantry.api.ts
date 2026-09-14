@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { SKIP_ERROR_TOAST } from '../auth/error.interceptor';
-import type { PantryItem, PantrySort, ProductUnit } from './pantry.models';
+import type { Page, PantryItem, PantrySort, ProductUnit, StockMovement } from './pantry.models';
 
 /** Lo que hace falta para dar de alta un artículo. O el producto, o su nombre y su unidad. */
 export interface AddPantryItem {
@@ -112,6 +112,25 @@ export class PantryApi {
       this.base(householdId),
       body,
       { context: this.handledByCaller },
+    );
+  }
+
+  /**
+   * La bitácora de un artículo, de lo más reciente a lo más antiguo.
+   *
+   * Se pagina porque un artículo de uso diario acumula movimientos sin parar, y porque la
+   * pantalla sólo necesita los últimos para responder «¿quién se llevó los huevos?».
+   */
+  movements(
+    householdId: string,
+    itemId: string,
+    page: number,
+    size: number,
+  ): Observable<Page<StockMovement>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<Page<StockMovement>>(
+      `${this.base(householdId)}/${itemId}/movements`,
+      { params, context: this.handledByCaller },
     );
   }
 
