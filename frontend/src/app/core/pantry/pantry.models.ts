@@ -47,6 +47,26 @@ export function unitLabel(unit: ProductUnit): string {
 }
 
 /**
+ * Cuánto suma o resta un toque del stepper, según la unidad.
+ *
+ * Un salto de 1 sobre 1.500 g de arroz no es un control, es un castigo: harían falta cien
+ * toques para lo que en la cabeza es «medio kilo más». El campo central sigue estando para
+ * cualquier cifra que no caiga en el salto.
+ */
+export function stepFor(unit: ProductUnit): number {
+  switch (unit) {
+    case 'G':
+    case 'ML':
+      return 100;
+    case 'KG':
+    case 'L':
+      return 0.5;
+    default:
+      return 1;
+  }
+}
+
+/**
  * La cantidad, sin ceros de relleno.
  *
  * La API trabaja con tres decimales porque los necesita para no perder nada al sumar

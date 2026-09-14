@@ -46,8 +46,53 @@ export class PantryApi {
       params = params.set('sort', query.sort);
     }
     return this.http.get<readonly PantryItem[]>(
-      `/api/v1/households/${householdId}/pantry/items`,
+      this.base(householdId),
       { params, context: this.handledByCaller },
     );
+  }
+
+  /**
+   * Gasta una cantidad. Relativo: compone con lo que haga otro miembro a la vez, en
+   * cualquier orden, así que no lleva versión ni la necesita.
+   *
+   * Si se pide más de lo que hay, el servidor registra lo que de verdad se gastó.
+   */
+  consume(householdId: string, itemId: string, quantity: number): Observable<PantryItem> {
+    return this.http.post<PantryItem>(
+      `${this.base(householdId)}/${itemId}:consume`,
+      { quantity },
+      { context: this.handledByCaller },
+    );
+  }
+
+  /** Repone una cantidad. Relativo, igual que `consume`. */
+  restock(householdId: string, itemId: string, quantity: number): Observable<PantryItem> {
+    return this.http.post<PantryItem>(
+      `${this.base(householdId)}/${itemId}:restock`,
+      { quantity },
+      { context: this.handledByCaller },
+    );
+  }
+
+  /**
+   * Fija la cantidad contada a mano. ABSOLUTO: depende de lo que quien edita tenía delante,
+   * así que manda la versión leída. Si ya no es la actual, el servidor responde 409 en vez
+   * de borrar en silencio lo que otro miembro cambió entre medias.
+   */
+  setQuantity(
+    householdId: string,
+    itemId: string,
+    quantity: number,
+    version: number,
+  ): Observable<PantryItem> {
+    return this.http.patch<PantryItem>(
+      `${this.base(householdId)}/${itemId}`,
+      { quantity, version },
+      { context: this.handledByCaller },
+    );
+  }
+
+  private base(householdId: string): string {
+    return `/api/v1/households/${householdId}/pantry/items`;
   }
 }

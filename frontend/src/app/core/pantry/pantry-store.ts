@@ -5,6 +5,7 @@ import { catchError } from 'rxjs/operators';
 
 import { HouseholdContextService } from '../household/household-context.service';
 import { PantryApi } from './pantry.api';
+import { PantryWrites } from './pantry-writes';
 import type { PantryItem, PantrySort } from './pantry.models';
 
 /** Un producto sin categorizar no aporta una opción de filtro. */
@@ -30,6 +31,7 @@ export const SEARCH_DEBOUNCE_MS = 300;
 export class PantryStore {
   private readonly api = inject(PantryApi);
   private readonly context = inject(HouseholdContextService);
+  private readonly writes = inject(PantryWrites);
 
   // -- Filtros -------------------------------------------------------------
 
@@ -96,6 +98,14 @@ export class PantryStore {
   readonly noMatches = computed(() => this.loaded() && this.items().length === 0 && this.hasFilters());
 
   constructor() {
+    // Las escrituras necesitan poder mirar y corregir lo pintado, pero no tienen por qué
+    // saber cómo está guardado: se les da lo tres cosas que hacen falta y nada más.
+    this.writes.connect({
+      find: (itemId) => this.items().find((item) => item.id === itemId),
+      patch: (itemId, changes) => this.patchItem(itemId, changes),
+      reload: () => this.reload(),
+    });
+
     // El texto se pinta al teclear pero sólo viaja cuando paras: una petición por letra
     // sería la lista entera rehecha seis veces mientras escribes «lechuga».
     toObservable(this.search)
@@ -135,6 +145,21 @@ export class PantryStore {
       .subscribe();
   }
 
+  /** Un toque en − o en +. Relativo: no manda versión y compone con lo de cualquier otro. */
+  nudge(itemId: string, delta: number): void {
+    this.writes.nudge(itemId, delta);
+  }
+
+  /** Una cantidad contada a mano. Absoluta: viaja con la versión y puede dar 409. */
+  setQuantity(itemId: string, quantity: number): void {
+    this.writes.setQuantity(itemId, quantity);
+  }
+
+  /** Manda lo que estuviera esperando el debounce. Al salir de la pantalla, por ejemplo. */
+  flushWrites(): void {
+    this.writes.flush();
+  }
+
   /** Tras un fallo, o cuando la pantalla quiere datos frescos. */
   reload(): void {
     this.reloadToken.update((token) => token + 1);
@@ -158,10 +183,20 @@ export class PantryStore {
 
   private lastHouseholdId: string | null = null;
 
+  /** Reemplaza un artículo sin tocar los demás ni el orden que fijó el servidor. */
+  private patchItem(itemId: string, changes: Partial<PantryItem>): void {
+    const current = this.data();
+    if (!current) {
+      return;
+    }
+    this.data.set(current.map((item) => (item.id === itemId ? { ...item, ...changes } : item)));
+  }
+
   private beforeLoad(householdId: string | null): void {
     // Al cambiar de hogar, lo cargado deja de ser cierto y hay que volver a «no lo sé»:
     // conservarlo enseñaría la despensa del hogar del que se acaba de salir, con nombres
     // de productos que aquí no existen.
+    this.writes.useHousehold(householdId);
     if (householdId !== this.lastHouseholdId) {
       this.lastHouseholdId = householdId;
       this.data.set(null);

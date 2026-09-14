@@ -180,7 +180,7 @@ interface DemoRow {
               [value]="qty()"
               unit="kg"
               [step]="0.5"
-              (valueChange)="qty.set($event)" />
+              (changed)="qty.set($event.value)" />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="text-[13px] font-medium text-text">Desactivado</span>
@@ -342,7 +342,7 @@ interface DemoRow {
         <div class="flex flex-col gap-4">
           <p class="text-[15px] text-text-muted">Arroz grano largo, en la alacena.</p>
           <div class="flex justify-center">
-            <ui-quantity-stepper [value]="qty()" unit="kg" [step]="0.5" (valueChange)="qty.set($event)" />
+            <ui-quantity-stepper [value]="qty()" unit="kg" [step]="0.5" (changed)="qty.set($event.value)" />
           </div>
           <ui-button [block]="true" size="lg" (pressed)="sheetOpen.set(false)">Guardar</ui-button>
         </div>

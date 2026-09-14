@@ -51,6 +51,10 @@ async function makePage(width, height, theme) {
 
   // Nada de red real: el backend se simula y GIS se bloquea para que las
   // capturas sean deterministas.
+  // Catch-all primero: una llamada sin simular llega al backend real, tumba la sesion y la
+  // captura acaba en /login pareciendo un fallo del producto.
+  await page.route('**/api/**', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route('**/api/v1/me', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PROFILE) }));
   // GIS se deja pasar: queremos ver el botón real que renderiza Google.
@@ -252,6 +256,9 @@ for (const abierto of [false, true]) {
         colorScheme: theme,
       });
       const page = await context.newPage();
+      // Catch-all primero: una llamada sin simular llega al backend real, tumba la
+      // sesion y la captura acaba en /login pareciendo un fallo del producto.
+      await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PROFILE));
       await page.route('**/join-requests**', json(CON_PENDIENTES));
       await page.addInitScript((t) => {
@@ -305,6 +312,9 @@ for (const target of ONBOARDING) {
         colorScheme: theme,
       });
       const page = await context.newPage();
+      // Catch-all primero: una llamada sin simular llega al backend real, tumba la
+      // sesion y la captura acaba en /login pareciendo un fallo del producto.
+      await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(target.perfil));
       for (const [patron, handler] of target.rutas ?? []) {
         await page.route(patron, handler);
@@ -401,6 +411,9 @@ for (const caso of ['home', 'account-menu']) {
         colorScheme: theme,
       });
       const page = await context.newPage();
+      // Catch-all primero: una llamada sin simular llega al backend real, tumba la
+      // sesion y la captura acaba en /login pareciendo un fallo del producto.
+      await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PERFIL_ADMIN));
       await page.route('**/members', json(MIEMBROS));
       await page.route('**/join-requests**', json(SOLICITUDES));
@@ -436,6 +449,9 @@ for (const target of MANAGE) {
         colorScheme: theme,
       });
       const page = await context.newPage();
+      // Catch-all primero: una llamada sin simular llega al backend real, tumba la
+      // sesion y la captura acaba en /login pareciendo un fallo del producto.
+      await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PERFIL_ADMIN));
       const colgada = () => {};
       await page.route('**/members', target.miembros ? json(target.miembros) : colgada);
@@ -487,6 +503,10 @@ const DESPENSA = [
     parLevel: 1000, version: 4 },
   { id: 'i6', product: producto('Arroz grano largo', 'G', 'Despensa'), quantity: 1500, parLevel: 2000,
     version: 1 },
+  // Los dos extremos del significado tienen que estar en la misma captura: este esta LLENO
+  // (cantidad = objetivo) y la lechuga no tiene objetivo. En gris deben poder separarse.
+  { id: 'i9', product: producto('Café en grano', 'G', 'Despensa'), quantity: 340, parLevel: 340,
+    version: 6 },
   { id: 'i7', product: producto('Pan de molde', 'UNIT', 'Despensa'), quantity: 0, parLevel: 1, version: 9 },
   { id: 'i8', product: producto('Palta', 'UNIT', 'Nevera'), quantity: 0, parLevel: null, version: 5 },
 ];

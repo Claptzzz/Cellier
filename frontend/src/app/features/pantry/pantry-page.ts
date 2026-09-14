@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { PantryStore } from '../../core/pantry/pantry-store';
@@ -9,6 +9,7 @@ import { Input } from '../../shared/ui/input';
 import { Select } from '../../shared/ui/select';
 import { Skeleton } from '../../shared/ui/skeleton';
 import type { SelectOption } from '../../shared/ui/select';
+import type { QuantityChange } from '../../shared/ui/quantity-stepper';
 import { PantryRow } from './pantry-row';
 
 const SORT_OPTIONS: readonly SelectOption[] = [
@@ -125,7 +126,12 @@ const SKELETON_ROWS = 6;
           @if (store.available().length > 0) {
             <ul class="flex list-none flex-col gap-2 p-0">
               @for (item of store.available(); track item.id) {
-                <li><app-pantry-row [item]="item" [today]="today()" /></li>
+                <li>
+                  <app-pantry-row
+                    [item]="item"
+                    [today]="today()"
+                    (changed)="onQuantityChange(item.id, $event)" />
+                </li>
               }
             </ul>
           }
@@ -144,7 +150,12 @@ const SKELETON_ROWS = 6;
 
               <ul class="flex list-none flex-col gap-2 p-0">
                 @for (item of store.gone(); track item.id) {
-                  <li><app-pantry-row [item]="item" [today]="today()" /></li>
+                  <li>
+                    <app-pantry-row
+                      [item]="item"
+                      [today]="today()"
+                      (changed)="onQuantityChange(item.id, $event)" />
+                  </li>
                 }
               </ul>
             </section>
@@ -166,6 +177,23 @@ export class PantryPage {
     // vez serían dos peticiones idénticas seguidas.
     if (this.store.loaded()) {
       this.store.reload();
+    }
+
+    // Al salir de la pantalla puede quedar un toque esperando su debounce. Sin esto se
+    // pierde: la cifra se vio bajar y nunca llegó a la despensa de los demás.
+    inject(DestroyRef).onDestroy(() => this.store.flushWrites());
+  }
+
+  /**
+   * Las dos clases de escritura salen por caminos distintos, y el stepper ya dice cuál es.
+   * Un toque compone con el de cualquier otro miembro; un número escrito depende de lo que
+   * quien lo escribió tenía delante, y por eso viaja con su versión.
+   */
+  protected onQuantityChange(itemId: string, change: QuantityChange): void {
+    if (change.delta === null) {
+      this.store.setQuantity(itemId, change.value);
+    } else {
+      this.store.nudge(itemId, change.delta);
     }
   }
 
