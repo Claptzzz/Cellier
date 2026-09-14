@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 
 import { Icon } from './icon';
+import { mirrorToNative } from './native-value';
 
 let nextId = 0;
 
@@ -68,7 +69,6 @@ export interface QuantityChange {
           inputmode="decimal"
           [attr.aria-label]="label()"
           [disabled]="disabled()"
-          [value]="draft()"
           class="w-full bg-transparent text-center font-mono font-medium text-text
                  text-[length:var(--text-control)]
                  focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent
@@ -118,6 +118,8 @@ export class QuantityStepper {
   private readonly editing = signal(false);
 
   constructor() {
+    mirrorToNative(this.field, this.draft);
+
     effect(() => {
       const value = this.value();
       // El valor puede cambiar desde fuera: una respuesta del servidor que corrige lo que
@@ -164,19 +166,8 @@ export class QuantityStepper {
     }
   }
 
-  /**
-   * Escribe el texto en la señal y TAMBIÉN en el campo.
-   *
-   * Sólo con la señal no basta: si el valor enlazado no cambia entre dos comprobaciones
-   * —teclear «dos docenas» y salir devuelve el mismo «12» de antes—, Angular no vuelve a
-   * escribir el DOM y el campo se queda con lo que el usuario tecleó, que no es un número.
-   */
   private setDraft(text: string): void {
     this.draft.set(text);
-    const field = this.field();
-    if (field) {
-      field.nativeElement.value = text;
-    }
   }
 
   private clamp(next: number): number {

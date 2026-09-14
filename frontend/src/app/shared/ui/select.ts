@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, forwardRef, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, ElementRef, computed, forwardRef, input, signal, viewChild,
+} from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 import { Icon } from './icon';
+import { mirrorToNative } from './native-value';
 
 let nextId = 0;
 
@@ -31,9 +34,9 @@ export interface SelectOption {
 
       <div class="relative">
         <select
+          #campo
           [id]="id"
           [disabled]="disabled()"
-          [value]="value()"
           [attr.aria-describedby]="error() ? id + '-error' : null"
           [attr.aria-invalid]="error() ? 'true' : null"
           [class]="selectClasses()"
@@ -69,6 +72,14 @@ export class Select implements ControlValueAccessor {
 
   protected readonly value = signal('');
   protected readonly disabled = signal(false);
+
+  private readonly field = viewChild<ElementRef<HTMLSelectElement>>('campo');
+
+  constructor() {
+    // Un <select> además necesita que sus <option> existan cuando se le fija el valor, y el
+    // efecto corre cuando la vista ya está montada. El enlace lo intentaba antes de tiempo.
+    mirrorToNative(this.field, this.value);
+  }
 
   private onChange: (value: string) => void = () => {};
   protected onTouched: () => void = () => {};

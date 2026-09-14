@@ -4,6 +4,7 @@ import {
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 import { Icon } from './icon';
+import { mirrorToNative } from './native-value';
 import type { IconName } from './icon.data';
 
 let nextId = 0;
@@ -52,7 +53,6 @@ let nextId = 0;
           [attr.aria-invalid]="error() ? 'true' : null"
           [attr.spellcheck]="spellcheck()"
           [disabled]="disabled()"
-          [value]="value()"
           [class]="inputClasses()"
           (input)="onInput($event)"
           (blur)="onTouched()" />
@@ -96,6 +96,10 @@ export class Input implements ControlValueAccessor {
 
   private readonly field = viewChild<ElementRef<HTMLInputElement>>('campo');
 
+  constructor() {
+    mirrorToNative(this.field, this.value);
+  }
+
   private onChange: (value: string) => void = () => {};
   protected onTouched: () => void = () => {};
 
@@ -127,21 +131,8 @@ export class Input implements ControlValueAccessor {
     this.onChange(next);
   }
 
-  /**
-   * Escribe en la señal y TAMBIÉN en el campo.
-   *
-   * Sólo con la señal no basta: si el valor enlazado no cambia entre dos comprobaciones,
-   * Angular no vuelve a escribir el DOM y el campo se queda con lo que había. Se ve al
-   * vaciarlo desde fuera —un formulario que se reinicia tras enviar— y el texto anterior
-   * sigue ahí, invitando a mandarlo otra vez.
-   */
   writeValue(value: string | null): void {
-    const next = value ?? '';
-    this.value.set(next);
-    const field = this.field();
-    if (field) {
-      field.nativeElement.value = next;
-    }
+    this.value.set(value ?? '');
   }
 
   registerOnChange(fn: (value: string) => void): void {
