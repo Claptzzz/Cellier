@@ -3,7 +3,15 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { SKIP_ERROR_TOAST } from '../auth/error.interceptor';
-import type { PantryItem, PantrySort } from './pantry.models';
+import type { PantryItem, PantrySort, ProductUnit } from './pantry.models';
+
+/** Lo que hace falta para dar de alta un artículo. O el producto, o su nombre y su unidad. */
+export interface AddPantryItem {
+  readonly productId?: string;
+  readonly productName?: string;
+  readonly unit?: ProductUnit;
+  readonly quantity: number;
+}
 
 /** Filtros del listado. Los vacíos no viajan: la API ya distingue ausente de vacío. */
 export interface PantryQuery {
@@ -88,6 +96,21 @@ export class PantryApi {
     return this.http.patch<PantryItem>(
       `${this.base(householdId)}/${itemId}`,
       { quantity, version },
+      { context: this.handledByCaller },
+    );
+  }
+
+  /**
+   * Mete un artículo en la despensa.
+   *
+   * Con `productId` usa un producto del catálogo. Con `productName` + `unit`, reutiliza el
+   * que ya se llame así —sin distinguir mayúsculas— o lo crea. Si existe con OTRA unidad
+   * responde 409: la unidad es parte de la identidad del producto, no un detalle suyo.
+   */
+  add(householdId: string, body: AddPantryItem): Observable<PantryItem> {
+    return this.http.post<PantryItem>(
+      this.base(householdId),
+      body,
       { context: this.handledByCaller },
     );
   }

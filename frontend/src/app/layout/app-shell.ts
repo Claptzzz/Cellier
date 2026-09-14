@@ -19,9 +19,10 @@ import { ThemeToggle } from './theme-toggle';
  *  768-1023px  franja intermedia: sigue la barra inferior, que es lo cómodo en
  *              tablet vertical.
  *
- * El contenedor de contenido reserva --bottom-nav-h más el alto del FAB en la
- * franja móvil, para que ni la barra ni el botón flotante tapen la última fila
- * de una lista.
+ * El contenedor de contenido reserva --bottom-nav-h más el alto del botón flotante
+ * en la franja móvil, para que ni la barra ni el botón tapen la última fila de una
+ * lista. El botón NO vive aquí: lo pone la pantalla que tiene algo que añadir, que es
+ * la que sabe qué hace al pulsarlo. Aquí sólo se le guarda el sitio.
  */
 /** Secciones con pantalla propia que no son destinos de la navegación. */
 const EXTRA_SECTIONS: Record<string, string> = {
@@ -175,26 +176,6 @@ const EXTRA_SECTIONS: Record<string, string> = {
         </ul>
       </nav>
 
-      <!-- ============ ACCIÓN PRINCIPAL (<1024px) ============ -->
-      <!-- Se apoya sobre la barra inferior. El <main> reserva su alto más el de
-           la barra, para que nunca tape la última fila de una lista.
-
-           Sólo en la despensa: es "añadir artículo", y sobre la pantalla de gestión o
-           sobre ajustes era un botón flotante que no significaba nada allí. -->
-      @if (showFab()) {
-      <button
-        type="button"
-        class="fixed right-4 z-40 flex h-14 w-14 items-center justify-center
-               rounded-full bg-accent text-accent-contrast shadow-e2
-               transition-[filter,transform] duration-150
-               hover:brightness-110 active:translate-y-px
-               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
-               lg:hidden"
-        style="bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom));"
-        aria-label="Añadir artículo">
-        <ui-icon name="plus" [size]="24" />
-      </button>
-      }
     </div>
   `,
   styles: `
@@ -355,8 +336,6 @@ export class AppShell {
 
   protected readonly pendingApprovals = this.pending.badgeCount;
 
-  /** El botón flotante pertenece a la despensa; fuera de ella no tiene acción que ofrecer. */
-  protected readonly showFab = computed(() => this.currentSection() === 'pantry');
 
   protected readonly pendingLabel = computed(() => {
     const count = this.pendingApprovals();

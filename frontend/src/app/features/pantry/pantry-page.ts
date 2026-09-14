@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { HouseholdContextService } from '../../core/household/household-context.service';
 import { PantryStore } from '../../core/pantry/pantry-store';
+import { ToastService } from '../../core/toast/toast.service';
 import type { PantrySort } from '../../core/pantry/pantry.models';
 import { Button } from '../../shared/ui/button';
 import { EmptyState } from '../../shared/ui/empty-state';
@@ -10,6 +12,8 @@ import { Select } from '../../shared/ui/select';
 import { Skeleton } from '../../shared/ui/skeleton';
 import type { SelectOption } from '../../shared/ui/select';
 import type { QuantityChange } from '../../shared/ui/quantity-stepper';
+import { Icon } from '../../shared/ui/icon';
+import { AddItemPanel } from './add-item-panel';
 import { PantryRow } from './pantry-row';
 
 const SORT_OPTIONS: readonly SelectOption[] = [
@@ -37,7 +41,9 @@ const SKELETON_ROWS = 6;
 @Component({
   selector: 'app-pantry-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Button, EmptyState, FormsModule, Input, PantryRow, Select, Skeleton],
+  imports: [
+    AddItemPanel, Button, EmptyState, FormsModule, Icon, Input, PantryRow, Select, Skeleton,
+  ],
   template: `
     <!-- Sin gap entre la barra pegada y la lista: el hueco no lo tapa el fondo de la
          barra, y por él se ve pasar un trozo de tarjeta recortado mientras se scrollea.
@@ -80,6 +86,12 @@ const SKELETON_ROWS = 6;
             [ngModel]="store.sort()"
             (ngModelChange)="onSortChange($event)" />
         </div>
+
+        <!-- En escritorio no hay botón flotante —estorbaría con el ratón—, así que la
+             acción principal vive aquí, donde ya está la vista puesta. -->
+        <div class="hidden lg:flex lg:justify-end">
+          <ui-button icon="plus" (pressed)="adding.set(true)">Agregar producto</ui-button>
+        </div>
       </div>
       }
 
@@ -112,7 +124,9 @@ const SKELETON_ROWS = 6;
         <ui-empty-state
           icon="package"
           title="Tu despensa está vacía"
-          description="Aquí verás lo que hay en casa, con cuánto queda y qué está por vencer." />
+          description="Aquí verás lo que hay en casa, con cuánto queda y qué está por vencer.">
+          <ui-button icon="plus" (pressed)="adding.set(true)">Agregar el primero</ui-button>
+        </ui-empty-state>
       } @else if (store.noMatches()) {
         <ui-empty-state
           icon="magnifying-glass"
@@ -163,11 +177,42 @@ const SKELETON_ROWS = 6;
         </div>
       }
     </div>
+
+    <!-- El botón flotante vive AQUÍ y no en el chasis. Es «añadir artículo»: pertenece a la
+         pantalla que tiene artículos, y teniéndolo aquí no hace falta que el chasis adivine
+         en qué sección está para decidir si lo pinta. El hueco que le reserva la franja
+         inferior sigue siendo del chasis, que es quien conoce la altura de su navegación. -->
+    <button
+      type="button"
+      class="fixed right-4 z-40 flex h-14 w-14 items-center justify-center
+             rounded-full bg-accent text-accent-contrast shadow-e2
+             transition-[filter,transform] duration-150
+             hover:brightness-110 active:translate-y-px
+             focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
+             lg:hidden"
+      style="bottom: calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom));"
+      aria-label="Agregar producto"
+      (click)="adding.set(true)">
+      <ui-icon name="plus" [size]="24" />
+    </button>
+
+    @if (householdId(); as householdId) {
+      <app-add-item-panel
+        [open]="adding()"
+        [householdId]="householdId"
+        (closed)="adding.set(false)"
+        (added)="onAdded($event)" />
+    }
   `,
   styles: `:host { display: block; }`,
 })
 export class PantryPage {
   protected readonly store = inject(PantryStore);
+  private readonly toasts = inject(ToastService);
+
+  protected readonly householdId = inject(HouseholdContextService).householdId;
+
+  protected readonly adding = signal(false);
 
   constructor() {
     // El estado vive en un servicio de raíz que sobrevive a la navegación, así que al
@@ -233,6 +278,13 @@ export class PantryPage {
     const total = this.store.gone().length;
     return total === 1 ? '1 artículo' : `${total} artículos`;
   });
+
+  protected onAdded(name: string): void {
+    // Se vuelve a pedir la lista en vez de insertar la fila a mano: el orden lo fija el
+    // servidor, y colocarla aquí sería reimplementar ese criterio en el cliente.
+    this.store.reload();
+    this.toasts.success(`${name} está en la despensa`);
+  }
 
   protected onCategoryChange(value: string): void {
     this.store.category.set(value === '' ? null : value);

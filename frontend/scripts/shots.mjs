@@ -537,6 +537,54 @@ const ESCENAS_DESPENSA = [
       await page.waitForTimeout(300);
     },
   },
+  {
+    // El alta: hoja en movil, dialogo en escritorio. Se captura el formulario recien
+    // abierto y, aparte, con el autocompletado desplegado.
+    slug: 'despensa-agregar',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page, label) {
+      const abrir = label === '375'
+        ? page.getByRole('button', { name: 'Agregar producto', exact: true })
+        : page.getByRole('button', { name: /Agregar producto/ });
+      await abrir.first().click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    slug: 'despensa-agregar-sugerencias',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page, label) {
+      await page.route('**/products**', json([
+        { id: 'c1', name: 'Leche entera', unit: 'L', category: 'Nevera' },
+        { id: 'c2', name: 'Leche de almendras', unit: 'L', category: 'Nevera' },
+        { id: 'c3', name: 'Leche condensada', unit: 'ML', category: 'Despensa' },
+      ]));
+      const abrir = label === '375'
+        ? page.getByRole('button', { name: 'Agregar producto', exact: true })
+        : page.getByRole('button', { name: /Agregar producto/ });
+      await abrir.first().click();
+      await page.waitForTimeout(300);
+      await page.locator('dialog[open] input').first().fill('leche');
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    slug: 'despensa-agregar-nuevo',
+    items: DESPENSA,
+    sinPaginaEntera: true,
+    async interactuar(page, label) {
+      await page.route('**/products**', json([]));
+      const abrir = label === '375'
+        ? page.getByRole('button', { name: 'Agregar producto', exact: true })
+        : page.getByRole('button', { name: /Agregar producto/ });
+      await abrir.first().click();
+      await page.waitForTimeout(300);
+      await page.locator('dialog[open] input').first().fill('Quinoa');
+      await page.waitForTimeout(600);
+    },
+  },
   { slug: 'despensa-error', error: true },
 ];
 
@@ -569,7 +617,7 @@ for (const escena of ESCENAS_DESPENSA) {
 
       await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
       await page.waitForTimeout(escena.esperaMs ?? 1100);
-      if (escena.interactuar) await escena.interactuar(page);
+      if (escena.interactuar) await escena.interactuar(page, label);
 
       const name = `${escena.slug}-${label}-${theme}.png`;
       await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
