@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +18,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
      * con conocer un id.
      */
     Optional<Product> findByIdAndHouseholdId(UUID id, UUID householdId);
+
+    /**
+     * Varios productos de ese hogar, de una vez.
+     *
+     * <p>Existe para poder validar una lista entera con UNA consulta. Comprobarlos uno a uno
+     * no sólo cuesta n viajes: invita a escribir a medida que se valida, y entonces una lista
+     * con un producto ajeno en la quinta línea deja las cuatro primeras aplicadas.
+     */
+    List<Product> findAllByIdInAndHouseholdId(Collection<UUID> ids, UUID householdId);
 
     /**
      * Busca por nombre sin distinguir mayúsculas, que es como está definida la unicidad.
