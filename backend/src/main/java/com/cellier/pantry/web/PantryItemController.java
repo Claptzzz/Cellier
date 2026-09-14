@@ -199,6 +199,17 @@ public class PantryItemController {
               "instance": "/api/v1/households/8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98/pantry/items/7a1c4e93-6d05-4b28-91f7-0c3a8d5e2b46:consume"
             }""";
 
+    private static final String EXAMPLE_STALE_WRITE = """
+            {
+              "type": "https://cellier.app/problems/conflict",
+              "title": "Conflicto con el estado actual",
+              "status": 409,
+              "detail": "Otro miembro del hogar cambió este producto mientras lo editabas. Ahora hay 4. Revisa cómo quedó y vuelve a intentarlo.",
+              "instance": "/api/v1/households/8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98/pantry/items/7a1c4e93-6d05-4b28-91f7-0c3a8d5e2b46",
+              "currentVersion": 7,
+              "currentQuantity": 4.000
+            }""";
+
     private static final String EXAMPLE_VALIDATION = """
             {
               "type": "https://cellier.app/problems/bad-request",
@@ -383,6 +394,16 @@ public class PantryItemController {
                     alguien corrigiendo a mano lo que el sistema creía tener. Para gastar o
                     reponer están `:consume` y `:restock`, que además dicen *qué* pasó. Si la
                     cantidad enviada es la que ya había, no se registra nada.
+
+                    **Manda `version`** si estás editando a partir de algo que el usuario leyó
+                    en pantalla. Todo lo que se cambia aquí es un valor absoluto —depende de lo
+                    que tenía delante quien decidió—, así que si otro miembro lo movió mientras
+                    tanto, aplicarlo tal cual borraría su cambio en silencio. Con la versión, esa
+                    escritura se rechaza con 409 y la respuesta trae `currentVersion` y
+                    `currentQuantity`: basta para decir en qué quedó sin una segunda petición.
+
+                    Omitirla mantiene el comportamiento de siempre —se aplica sobre lo que haya—,
+                    para no romper a quien ya llama a este endpoint.
                     """)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Artículo actualizado.",
@@ -401,10 +422,17 @@ public class PantryItemController {
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class),
                             examples = @ExampleObject(name = "articuloAjeno", value = EXAMPLE_ITEM_NOT_FOUND))),
-            @ApiResponse(responseCode = "409", description = "Otra persona del hogar modificó el artículo entre tu lectura y tu escritura.",
+            @ApiResponse(responseCode = "409", description = """
+                    Otra persona del hogar modificó el artículo entre tu lectura y tu escritura.
+
+                    Si mandaste `version`, el cuerpo trae además `currentVersion` y
+                    `currentQuantity`. Si no la mandaste, sólo se detecta la colisión simultánea
+                    y el cuerpo no puede decir en qué quedó.""",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class),
-                            examples = @ExampleObject(name = "colision", value = EXAMPLE_OPTIMISTIC_LOCK)))
+                            examples = {
+                                    @ExampleObject(name = "escrituraRancia", value = EXAMPLE_STALE_WRITE),
+                                    @ExampleObject(name = "colisionSimultanea", value = EXAMPLE_OPTIMISTIC_LOCK)}))
     })
     @PatchMapping(path = "/{itemId}",
             consumes = MediaType.APPLICATION_JSON_VALUE,

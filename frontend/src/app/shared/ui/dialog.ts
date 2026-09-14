@@ -43,6 +43,10 @@ import { Icon } from './icon';
     :host { display: contents; }
 
     .ui-dialog {
+      /* El navegador centra un <dialog> modal con margin:auto, y la base de estilos lo
+         resetea a 0 para todos los elementos. Sin esto el diálogo se pega a la esquina
+         superior izquierda: no se vio hasta que una captura mostró uno abierto. */
+      margin: auto;
       padding: 0;
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);

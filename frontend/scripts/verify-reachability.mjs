@@ -114,6 +114,9 @@ async function recorrer(width) {
     const origen = new URL(page.url()).pathname;
     alcanzadas.add(origen);
     const lista = (await controles(page)).filter((c) => !NO_PULSAR.test(c.nombre));
+    // A stderr: el informe va a stdout y se lee entero al final, pero un recorrido que
+    // tarda de mas hay que poder mirarlo mientras corre para saber donde se atasca.
+    process.stderr.write(`  [${width}px] ${origen}: ${lista.length} controles\n`);
 
     for (const control of lista) {
       await page.goto(BASE + desde, { waitUntil: 'commit' });

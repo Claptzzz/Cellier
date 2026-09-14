@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, forwardRef, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, ElementRef, computed, forwardRef, input, signal, viewChild,
+} from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 import { Icon } from './icon';
+import { mirrorToNative } from './native-value';
 import type { IconName } from './icon.data';
 
 let nextId = 0;
@@ -39,6 +42,7 @@ let nextId = 0;
         }
 
         <input
+          #campo
           [id]="id"
           [type]="type()"
           [attr.inputmode]="inputMode()"
@@ -49,7 +53,6 @@ let nextId = 0;
           [attr.aria-invalid]="error() ? 'true' : null"
           [attr.spellcheck]="spellcheck()"
           [disabled]="disabled()"
-          [value]="value()"
           [class]="inputClasses()"
           (input)="onInput($event)"
           (blur)="onTouched()" />
@@ -90,6 +93,12 @@ export class Input implements ControlValueAccessor {
 
   protected readonly value = signal('');
   protected readonly disabled = signal(false);
+
+  private readonly field = viewChild<ElementRef<HTMLInputElement>>('campo');
+
+  constructor() {
+    mirrorToNative(this.field, this.value);
+  }
 
   private onChange: (value: string) => void = () => {};
   protected onTouched: () => void = () => {};

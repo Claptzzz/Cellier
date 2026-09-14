@@ -14,6 +14,8 @@ interface DemoRow {
   readonly qty: string;
   readonly level: number;
   readonly state: LevelState;
+  /** Falso cuando el hogar no ha definido nivel objetivo para ese artículo. */
+  readonly hasTarget?: boolean;
 }
 
 /**
@@ -81,7 +83,11 @@ interface DemoRow {
             <article
               class="flex items-stretch gap-3 rounded-md border border-border
                      bg-surface-raised p-3 shadow-e1">
-              <ui-level-band [level]="row.level" [state]="row.state" [itemLabel]="row.name" />
+              <ui-level-band
+                [level]="row.level"
+                [hasTarget]="row.hasTarget ?? true"
+                [state]="row.state"
+                [itemLabel]="row.name" />
 
               <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
                 <div class="min-w-0">
@@ -174,7 +180,7 @@ interface DemoRow {
               [value]="qty()"
               unit="kg"
               [step]="0.5"
-              (valueChange)="qty.set($event)" />
+              (changed)="qty.set($event.value)" />
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="text-[13px] font-medium text-text">Desactivado</span>
@@ -336,7 +342,7 @@ interface DemoRow {
         <div class="flex flex-col gap-4">
           <p class="text-[15px] text-text-muted">Arroz grano largo, en la alacena.</p>
           <div class="flex justify-center">
-            <ui-quantity-stepper [value]="qty()" unit="kg" [step]="0.5" (valueChange)="qty.set($event)" />
+            <ui-quantity-stepper [value]="qty()" unit="kg" [step]="0.5" (changed)="qty.set($event.value)" />
           </div>
           <ui-button [block]="true" size="lg" (pressed)="sheetOpen.set(false)">Guardar</ui-button>
         </div>
@@ -414,6 +420,13 @@ export class UiKitchenSink {
     { name: 'Café en grano', place: 'Alacena', due: 'vence en 2 meses', qty: '340 g', level: 55, state: 'ok' },
     { name: 'Leche entera', place: 'Refrigerador', due: 'vence mañana', qty: '1,0 L', level: 28, state: 'warn' },
     { name: 'Aceite de oliva', place: 'Alacena', due: 'vencido', qty: '0', level: 6, state: 'danger' },
+    // Sin nivel objetivo no hay proporción que dibujar: relleno neutro a plena altura, y la
+    // etiqueta accesible dice «hay existencias» en vez de inventarse un porcentaje. Pintarlo
+    // de --ok haría que el artículo del que menos se sabe se viera como el mejor surtido.
+    { name: 'Lechuga', place: 'Refrigerador', due: 'sin vencimiento', qty: '2 un',
+      level: 0, state: 'ok', hasTarget: false },
+    { name: 'Palta', place: 'Refrigerador', due: 'se acabó', qty: '0 un',
+      level: 0, state: 'empty', hasTarget: false },
   ];
 
   protected readonly places = [

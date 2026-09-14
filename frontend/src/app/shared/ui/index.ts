@@ -18,4 +18,5 @@ export type { BadgeTone } from './badge';
 export type { ButtonSize, ButtonVariant } from './button';
 export type { IconName } from './icon.data';
 export type { LevelState } from './level-band';
+export type { QuantityChange } from './quantity-stepper';
 export type { SelectOption } from './select';

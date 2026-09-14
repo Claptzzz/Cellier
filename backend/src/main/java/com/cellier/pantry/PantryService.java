@@ -151,6 +151,15 @@ public class PantryService {
         access.requireMember(actor.getId(), householdId);
         PantryItem item = requireItem(householdId, itemId);
 
+        // La versión llega sólo si el cliente edita a partir de algo que el usuario leyó.
+        // Comprobarla ANTES de tocar nada es lo que impide que una cantidad escrita a mano
+        // pise, sin decir nada, lo que otro miembro cambió mientras tanto. Sin esto el
+        // @Version sólo cazaría dos transacciones en el mismo instante, que casi nunca pasa:
+        // el caso real es alguien editando en el súper mientras otro descuenta en casa.
+        if (request.version() != null && request.version() != item.getVersion()) {
+            throw new StaleWriteException(item.getVersion(), item.getQuantity());
+        }
+
         if (request.quantity() != null) {
             BigDecimal delta = item.adjustTo(request.quantity());
             // Null significa que la cantidad no cambió: un ajuste que no ajusta nada no es
