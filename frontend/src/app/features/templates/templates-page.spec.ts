@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { HouseholdContextService } from '../../core/household/household-context.service';
 import { ViewportService } from '../../core/layout/viewport.service';
@@ -27,6 +28,8 @@ describe('TemplatesPage', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        // Las filas enlazan al editor: sin router, `routerLink` no encuentra la ruta activa.
+        provideRouter([]),
         { provide: HouseholdContextService, useValue: { householdId } },
         { provide: ViewportService, useValue: { isDesktop: signal(true) } },
       ],

@@ -10,6 +10,7 @@ import { TemplateStore } from '../../core/templates/template-store';
 import { ToastService } from '../../core/toast/toast.service';
 import type { TemplateSummary } from '../../core/templates/template.models';
 import { NgTemplateOutlet } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ViewportService } from '../../core/layout/viewport.service';
 import { BottomSheet } from '../../shared/ui/bottom-sheet';
 import { Button } from '../../shared/ui/button';
@@ -32,8 +33,8 @@ import type { NameIntent } from './template-name-dialog';
   selector: 'app-templates-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    BottomSheet, Button, EmptyState, Icon, IconButton, Menu, NgTemplateOutlet, Skeleton,
-    TemplateNameDialog,
+    BottomSheet, Button, EmptyState, Icon, IconButton, Menu, NgTemplateOutlet, RouterLink,
+    Skeleton, TemplateNameDialog,
   ],
   template: `
     <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 pb-4">
@@ -103,13 +104,14 @@ import type { NameIntent } from './template-name-dialog';
             <li>
               <div class="flex items-center gap-2 rounded-md border border-border
                           bg-surface-raised pl-4 pr-2 shadow-e1">
-                <!-- Todavía NO es un enlace: el editor llega en el PR siguiente, y un enlace
-                     a una ruta que no existe acaba en el redirector de rutas desconocidas.
-                     Un botón muerto es la versión pequeña de una pantalla huérfana. -->
-                <div class="flex min-w-0 flex-1 flex-col gap-1 py-4">
+                <a
+                  class="flex min-w-0 flex-1 flex-col gap-1 py-4
+                         focus-visible:outline-2 focus-visible:outline-offset-2
+                         focus-visible:outline-accent"
+                  [routerLink]="['../', 'templates', template.id]">
                   <span class="truncate text-[15px] font-medium text-text">{{ template.name }}</span>
                   <span class="truncate text-[13px] text-text-muted">{{ subtitle(template) }}</span>
-                </div>
+                </a>
 
                 <!-- En escritorio, panel anclado a la fila. En móvil, hoja inferior: un
                      panel anclado a la última fila de una lista larga acaba abajo del todo,

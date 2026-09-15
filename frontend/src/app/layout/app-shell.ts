@@ -303,13 +303,21 @@ export class AppShell {
     if (last === 'settings') {
       return SETTINGS_DESTINATION.label;
     }
-    return (
-      NAV_DESTINATIONS.find((destination) => destination.segment === last)?.label ??
-      // Secciones que no están en la navegación pero sí tienen nombre propio. Sin esto la
-      // cabecera de escritorio rotulaba "Cellier", que no dice dónde estás.
-      EXTRA_SECTIONS[last] ??
-      'Cellier'
-    );
+
+    // Se prueba el último segmento y, si no dice nada, el anterior. Una pantalla de detalle
+    // —/templates/:id— termina en un identificador que no rotula nada, pero pertenece a la
+    // sección que lo precede. Sin este segundo intento, la cabecera de escritorio decía
+    // "Cellier" en cuanto se abría un detalle, que es no decir dónde estás.
+    for (const segment of [last, segments.at(-2) ?? '']) {
+      const label =
+        NAV_DESTINATIONS.find((destination) => destination.segment === segment)?.label ??
+        // Secciones que no están en la navegación pero sí tienen nombre propio.
+        EXTRA_SECTIONS[segment];
+      if (label) {
+        return label;
+      }
+    }
+    return 'Cellier';
   });
 
   protected readonly destinations = NAV_DESTINATIONS;

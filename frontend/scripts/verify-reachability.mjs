@@ -22,6 +22,7 @@ const NO_PULSAR =
 const PANTALLAS = [
   { nombre: 'despensa',            patron: /^\/h\/[^/]+\/pantry$/ },
   { nombre: 'plantillas',          patron: /^\/h\/[^/]+\/templates$/ },
+  { nombre: 'editor de plantilla', patron: /^\/h\/[^/]+\/templates\/[^/]+$/ },
   { nombre: 'recetas',             patron: /^\/h\/[^/]+\/recipes$/ },
   { nombre: 'hogar',               patron: /^\/h\/[^/]+\/home$/ },
   { nombre: 'administrar hogar',   patron: /^\/h\/[^/]+\/manage$/ },
@@ -48,6 +49,20 @@ const SOLICITUDES = [
   { id: 'r1', userId: 'u9', displayName: 'Diego Paz', email: 'diego@example.com', avatarUrl: null,
     status: 'PENDING', requestedAt: '2026-09-06T09:15:02Z', resolvedAt: null, resolvedByUserId: null },
 ];
+/** Una plantilla para que la lista tenga fila que pulsar y el editor deje de ser inalcanzable. */
+const PLANTILLAS = [
+  { id: 'tpl1', name: 'Compra semanal', itemCount: 2, createdByName: 'Ana Rivas',
+    createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z' },
+];
+const PLANTILLA = {
+  id: 'tpl1', name: 'Compra semanal', createdByName: 'Ana Rivas',
+  createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z',
+  items: [
+    { id: 'i1', productId: 'p1', productName: 'Huevos', unit: 'UNIT', category: 'Frescos',
+      desiredQuantity: 10 },
+  ],
+};
+
 const MIAS = [
   { id: 's1', householdId: OTRO, householdName: 'Depa Ñuñoa', status: 'PENDING',
     requestedAt: '2026-09-06T09:15:02Z', resolvedAt: null },
@@ -63,10 +78,12 @@ async function nuevoContexto(width) {
   const page = await context.newPage();
   await page.route('**/api/**', json([]));
   await page.route('**/api/v1/me', json(PERFIL));
-  await page.route('**/members', json(MIEMBROS));
-  await page.route('**/join-requests/mine', json(MIAS));
-  await page.route('**/households/*/join-requests**', json(SOLICITUDES));
-  await page.route(`**/households/${HID}`, json({
+  await page.route('**/api/v1/households/*/members', json(MIEMBROS));
+  await page.route('**/api/v1/join-requests/mine', json(MIAS));
+  await page.route('**/api/v1/households/*/join-requests**', json(SOLICITUDES));
+  await page.route('**/api/v1/households/*/templates', json(PLANTILLAS));
+  await page.route('**/api/v1/households/*/templates/*', json(PLANTILLA));
+  await page.route(`**/api/v1/households/${HID}`, json({
     id: HID, name: 'Casa Rivas', joinCode: 'K7M2QP9X', role: 'ADMIN',
     memberCount: 3, createdAt: '2026-09-01T10:00:00Z',
   }));
@@ -74,10 +91,21 @@ async function nuevoContexto(width) {
   return { context, page };
 }
 
+/**
+ * Los controles visibles, con el nombre CON EL QUE LUEGO SE BUSCAN.
+ *
+ * <p>Se usa `innerText` y no `textContent`. No es un detalle: `textContent` concatena sin
+ * separador, asi que un enlace con dos <span> pegados da "Compra semanal2 productos",
+ * mientras que el nombre accesible que usa `getByRole` dice "Compra semanal 2 productos".
+ * La busqueda exacta no encontraba nada, el recorrido se saltaba ese control EN SILENCIO,
+ * y la pantalla a la que llevaba salia declarada huerfana teniendo camino. `innerText` mide
+ * el texto renderizado, que es de donde sale el nombre accesible.
+ */
 const controles = (page) =>
   page.evaluate(() => {
     const nombre = (el) =>
-      (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ');
+      (el.getAttribute('aria-label') || el.innerText || el.textContent || '')
+        .trim().replace(/\s+/g, ' ');
     return [...document.querySelectorAll('a[href], button')]
       .filter((el) => el.checkVisibility() && !el.hasAttribute('disabled'))
       .map((el) => ({ nombre: nombre(el), rol: el.tagName === 'A' ? 'link' : 'button' }))
@@ -125,17 +153,28 @@ async function recorrer(width) {
 
       let destino = new URL(page.url()).pathname;
       if (destino === origen) {
-        // No navego: pudo abrir un panel. Se mira que ofrece dentro.
+        // No navego: pudo abrir un panel. Se mira TODO lo que ofrece dentro.
+        //
+        // Cada hijo se prueba desde cero —volver a la pantalla, volver a abrir el panel—
+        // porque pulsar uno cierra el panel o se lleva la navegacion. Y no se corta al
+        // primero que navega: un panel con varios destinos aporta varios caminos, y parando
+        // en el primero los demas quedaban sin explorar. Eso hacia que /onboarding saliera
+        // alcanzable solo por accidente, cuando el hijo que llevaba a el era el unico que el
+        // recorrido conseguia pulsar.
         const dentro = (await controles(page))
           .filter((c) => !NO_PULSAR.test(c.nombre) && c.nombre !== control.nombre);
+
         for (const hijo of dentro) {
+          await page.goto(BASE + desde, { waitUntil: 'commit' });
+          await page.waitForTimeout(600);
+          if (!(await pulsar(page, control))) continue;
           if (!(await pulsar(page, hijo))) continue;
+
           const p2 = new URL(page.url()).pathname;
           if (p2 !== origen) {
             alcanzadas.add(p2);
             aristas.push(`${origen} --[${control.nombre} › ${hijo.nombre}]--> ${p2}`);
             if (!visitadas.has(p2)) cola.push(p2);
-            break;
           }
         }
         continue;

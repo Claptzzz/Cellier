@@ -260,7 +260,7 @@ for (const abierto of [false, true]) {
       // sesion y la captura acaba en /login pareciendo un fallo del producto.
       await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PROFILE));
-      await page.route('**/join-requests**', json(CON_PENDIENTES));
+      await page.route('**/api/v1/**/join-requests**', json(CON_PENDIENTES));
       await page.addInitScript((t) => {
         localStorage.setItem('cellier.theme', t);
         localStorage.setItem('cellier.refreshToken', 'shot-token');
@@ -415,9 +415,9 @@ for (const caso of ['home', 'account-menu']) {
       // sesion y la captura acaba en /login pareciendo un fallo del producto.
       await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PERFIL_ADMIN));
-      await page.route('**/members', json(MIEMBROS));
-      await page.route('**/join-requests**', json(SOLICITUDES));
-      await page.route(`**/households/${HOUSEHOLD_ID}`, json(DETALLE));
+      await page.route('**/api/v1/households/*/members', json(MIEMBROS));
+      await page.route('**/api/v1/**/join-requests**', json(SOLICITUDES));
+      await page.route(`**/api/v1/households/${HOUSEHOLD_ID}`, json(DETALLE));
       await page.addInitScript((t) => {
         localStorage.setItem('cellier.theme', t);
         localStorage.setItem('cellier.refreshToken', 'shot-token');
@@ -454,9 +454,9 @@ for (const target of MANAGE) {
       await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PERFIL_ADMIN));
       const colgada = () => {};
-      await page.route('**/members', target.miembros ? json(target.miembros) : colgada);
-      await page.route('**/join-requests**', target.solicitudes ? json(target.solicitudes) : colgada);
-      await page.route(`**/households/${HOUSEHOLD_ID}`, target.miembros ? json(DETALLE) : colgada);
+      await page.route('**/api/v1/households/*/members', target.miembros ? json(target.miembros) : colgada);
+      await page.route('**/api/v1/**/join-requests**', target.solicitudes ? json(target.solicitudes) : colgada);
+      await page.route(`**/api/v1/households/${HOUSEHOLD_ID}`, target.miembros ? json(DETALLE) : colgada);
       await page.addInitScript((t) => {
         localStorage.setItem('cellier.theme', t);
         localStorage.setItem('cellier.refreshToken', 'shot-token');
@@ -521,7 +521,7 @@ const ESCENAS_DESPENSA = [
     async interactuar(page) {
       // Al buscar, la respuesta pasa a vacia: es el estado "no encaja nada", que tiene
       // salida propia y no debe parecerse a la despensa vacia.
-      await page.route('**/pantry/items**', json([]));
+      await page.route('**/api/v1/households/*/pantry/items**', json([]));
       await page.getByLabel(/Buscar en la despensa/).fill('quinoa');
       await page.waitForTimeout(600);
     },
@@ -556,7 +556,7 @@ const ESCENAS_DESPENSA = [
     items: DESPENSA,
     sinPaginaEntera: true,
     async interactuar(page, label) {
-      await page.route('**/products**', json([
+      await page.route('**/api/v1/households/*/products**', json([
         { id: 'c1', name: 'Leche entera', unit: 'L', category: 'Nevera' },
         { id: 'c2', name: 'Leche de almendras', unit: 'L', category: 'Nevera' },
         { id: 'c3', name: 'Leche condensada', unit: 'ML', category: 'Despensa' },
@@ -575,7 +575,7 @@ const ESCENAS_DESPENSA = [
     items: DESPENSA,
     sinPaginaEntera: true,
     async interactuar(page, label) {
-      await page.route('**/products**', json([]));
+      await page.route('**/api/v1/households/*/products**', json([]));
       const abrir = label === '375'
         ? page.getByRole('button', { name: 'Agregar producto', exact: true })
         : page.getByRole('button', { name: /Agregar producto/ });
@@ -592,7 +592,7 @@ const ESCENAS_DESPENSA = [
     items: DESPENSA,
     sinPaginaEntera: true,
     async interactuar(page) {
-      await page.route('**/movements**', json({
+      await page.route('**/api/v1/**/movements**', json({
         content: [
           { id: 'm1', type: 'CONSUMPTION', delta: -2, performedAt: '2026-09-13T18:30:00Z',
             performedByUserId: 'u2', performedByName: 'Bruno Soto' },
@@ -655,11 +655,11 @@ for (const escena of ESCENAS_DESPENSA) {
       await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PROFILE));
       if (escena.colgar) {
-        await page.route('**/pantry/items**', () => {});
+        await page.route('**/api/v1/households/*/pantry/items**', () => {});
       } else if (escena.error) {
-        await page.route('**/pantry/items**', (r) => r.fulfill({ status: 500 }));
+        await page.route('**/api/v1/households/*/pantry/items**', (r) => r.fulfill({ status: 500 }));
       } else {
-        await page.route('**/pantry/items**', json(escena.items));
+        await page.route('**/api/v1/households/*/pantry/items**', json(escena.items));
       }
 
       await page.addInitScript((t) => {
@@ -704,7 +704,7 @@ for (const theme of THEMES) {
   const page = await context.newPage();
   await page.route('**/api/**', json([]));
   await page.route('**/api/v1/me', json(PROFILE));
-  await page.route('**/pantry/items**', json(DESPENSA));
+  await page.route('**/api/v1/households/*/pantry/items**', json(DESPENSA));
   await page.addInitScript((t) => {
     localStorage.setItem('cellier.theme', t);
     localStorage.setItem('cellier.refreshToken', 'shot-token');
@@ -815,6 +815,90 @@ for (const escena of ESCENAS_PLANTILLAS) {
 
       await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/templates`, { waitUntil: 'commit' });
       await page.waitForTimeout(escena.esperaMs ?? 1100);
+      if (escena.interactuar) await escena.interactuar(page, label);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
+
+// ---- Editor de plantilla ----------------------------------------------------
+const DETALLE_PLANTILLA = {
+  id: 't1', name: 'Compra semanal', createdByName: 'Ana Rivas',
+  createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z',
+  items: [
+    { id: 'i1', productId: 'p1', productName: 'Huevos', unit: 'UNIT', category: 'Frescos',
+      desiredQuantity: 10 },
+    { id: 'i2', productId: 'p2', productName: 'Leche entera', unit: 'L', category: 'Frescos',
+      desiredQuantity: 2 },
+    { id: 'i3', productId: 'p3', productName: 'Salsa de tomate', unit: 'ML', category: 'Despensa',
+      desiredQuantity: 1000 },
+    { id: 'i4', productId: 'p4', productName: 'Arroz grano largo', unit: 'G', category: 'Despensa',
+      desiredQuantity: 1000 },
+  ],
+};
+
+const ESCENAS_EDITOR = [
+  { slug: 'editor-plantilla', detalle: DETALLE_PLANTILLA },
+  { slug: 'editor-vacio', detalle: { ...DETALLE_PLANTILLA, name: 'Asado del domingo', items: [] } },
+  {
+    slug: 'editor-sugerencias',
+    detalle: DETALLE_PLANTILLA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.route('**/api/v1/households/*/products**', json([
+        { id: 'p9', name: 'Pan de molde', unit: 'UNIT', category: 'Panaderia' },
+        { id: 'p8', name: 'Papas', unit: 'KG', category: 'Frescos' },
+      ]));
+      await page.getByLabel(/Agregar un producto/).fill('pa');
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    slug: 'editor-sin-guardar',
+    detalle: DETALLE_PLANTILLA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: /Añadir 1 un/ }).first().click();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    slug: 'editor-confirmar-salida',
+    detalle: DETALLE_PLANTILLA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: /Añadir 1 un/ }).first().click();
+      await page.waitForTimeout(250);
+      await page.getByRole('link', { name: 'Plantillas' }).first().click();
+      await page.waitForTimeout(500);
+    },
+  },
+];
+
+for (const escena of ESCENAS_EDITOR) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      await page.route('**/api/v1/households/*/templates/*', json(escena.detalle));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/templates/t1`, { waitUntil: 'commit' });
+      await page.waitForTimeout(1100);
       if (escena.interactuar) await escena.interactuar(page, label);
 
       const name = `${escena.slug}-${label}-${theme}.png`;

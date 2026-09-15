@@ -43,6 +43,20 @@ const TONE_CLASS: Record<ToastTone, string> = {
             }
           </div>
 
+          @if (toast.action; as action) {
+            <!-- La acción va ANTES del aspa y con área táctil propia: deshacer se pulsa con
+                 prisa, y tener el descarte al lado invita a cerrar lo que se quería recuperar. -->
+            <button
+              type="button"
+              class="-my-1 flex h-9 flex-none items-center rounded-sm px-3 text-[14px]
+                     font-medium text-accent transition-colors hover:bg-surface-sunken
+                     focus-visible:outline-2 focus-visible:outline-offset-2
+                     focus-visible:outline-accent"
+              (click)="toastService.run(toast.id)">
+              {{ action.label }}
+            </button>
+          }
+
           <button
             type="button"
             class="-m-1.5 flex h-9 w-9 flex-none items-center justify-center rounded-sm

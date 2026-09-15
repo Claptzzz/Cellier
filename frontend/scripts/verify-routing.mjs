@@ -50,7 +50,7 @@ async function visita({ path, profile, lastHousehold, misSolicitudes = [] }) {
   // simularla la peticion sale al backend real, vuelve 401, el interceptor intenta
   // refrescar con un token de mentira y acaba cerrando la sesion: todos los casos
   // terminaban en /login.
-  await page.route('**/households/*/join-requests**', (r) =>
+  await page.route('**/api/v1/households/*/join-requests**', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.addInitScript(([last]) => {
     localStorage.setItem('cellier.refreshToken', 'shot-token');
