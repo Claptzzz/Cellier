@@ -756,5 +756,76 @@ for (const [label, vp] of Object.entries(VIEWPORTS)) {
   }
 }
 
+
+// ---- Plantillas -------------------------------------------------------------
+const PLANTILLAS = [
+  { id: 't1', name: 'Compra semanal', itemCount: 12, createdByName: 'Ana Rivas',
+    createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z' },
+  { id: 't2', name: 'Asado del domingo', itemCount: 5, createdByName: 'Bruno Soto',
+    createdAt: '2026-08-30T19:45:00Z', updatedAt: '2026-08-30T19:45:00Z' },
+  { id: 't3', name: 'Despensa de emergencia', itemCount: 8,
+    createdAt: '2026-07-11T10:00:00Z', updatedAt: '2026-07-11T10:00:00Z' },
+];
+
+const ESCENAS_PLANTILLAS = [
+  { slug: 'plantillas-lista', datos: PLANTILLAS },
+  { slug: 'plantillas-vacia', datos: [] },
+  { slug: 'plantillas-cargando', colgar: true, esperaMs: 700 },
+  {
+    slug: 'plantillas-nueva',
+    datos: PLANTILLAS,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Nueva plantilla' }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    slug: 'plantillas-acciones',
+    datos: PLANTILLAS,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: /Acciones sobre Compra semanal/ }).first().click();
+      await page.waitForTimeout(400);
+    },
+  },
+];
+
+for (const escena of ESCENAS_PLANTILLAS) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      // El patron va a la ruta de la API y NO a '**/templates**' a secas: eso tambien
+      // casa con la navegacion a /h/:id/templates, y el documento se quedaba colgado.
+      const RUTA_API = '**/api/v1/households/*/templates**';
+      if (escena.colgar) {
+        await page.route(RUTA_API, () => {});
+      } else {
+        await page.route(RUTA_API, json(escena.datos));
+      }
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/templates`, { waitUntil: 'commit' });
+      await page.waitForTimeout(escena.esperaMs ?? 1100);
+      if (escena.interactuar) await escena.interactuar(page, label);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow });
+      await context.close();
+    }
+  }
+}
+
 await browser.close();
 console.log(JSON.stringify(results, null, 2));

@@ -19,6 +19,12 @@ public record TemplateSummaryResponse(
         @Schema(description = "Cuántos productos la componen.", example = "12")
         long itemCount,
 
+        @Schema(description = """
+                Quién la creó, o ausente si esa persona se dio de baja. Es un dato, no una \
+                autoridad: cualquier miembro del hogar puede editarla.""",
+                example = "Ana Rivas")
+        String createdByName,
+
         @Schema(description = "Cuándo se creó.", example = "2026-08-24T15:00:00Z")
         Instant createdAt,
 
