@@ -2,6 +2,8 @@ package com.cellier.template.web;
 
 import com.cellier.shared.config.OpenApiConfig;
 import com.cellier.template.PantryTemplateService;
+import com.cellier.template.TemplateReportService;
+import com.cellier.template.dto.TemplateReportResponse;
 import com.cellier.template.dto.CreateTemplateRequest;
 import com.cellier.template.dto.RenameTemplateRequest;
 import com.cellier.template.dto.ReplaceItemsRequest;
@@ -151,10 +153,52 @@ public class PantryTemplateController {
             }""";
 
     private final PantryTemplateService templates;
+    private final TemplateReportService reports;
 
-    public PantryTemplateController(PantryTemplateService templates) {
+    public PantryTemplateController(PantryTemplateService templates, TemplateReportService reports) {
         this.templates = templates;
+        this.reports = reports;
     }
+
+    private static final String EXAMPLE_REPORT = """
+            {
+              "templateId": "3f7c1a90-9d4e-4b22-8f61-2c5a7e0d4b13",
+              "templateName": "Compra semanal",
+              "generatedAt": "2026-08-24T15:00:00Z",
+              "summary": { "totalItems": 3, "missingItems": 2, "completionRate": 0.33 },
+              "items": [
+                {
+                  "productId": "7bfdf8ce-50e4-4144-9ec0-21320ce43d14",
+                  "productName": "Huevos",
+                  "unit": "UNIT",
+                  "category": "Frescos",
+                  "desiredQuantity": 10.000,
+                  "availableQuantity": 4.000,
+                  "missingQuantity": 6.000,
+                  "status": "MISSING"
+                },
+                {
+                  "productId": "1d0b6e47-93a5-4c02-8f13-5a7e90c2b4d8",
+                  "productName": "Salsa de tomate",
+                  "unit": "ML",
+                  "category": "Despensa",
+                  "desiredQuantity": 1000.000,
+                  "availableQuantity": 0.000,
+                  "missingQuantity": 1000.000,
+                  "status": "MISSING"
+                },
+                {
+                  "productId": "5b3e8c02-71d4-4a96-8e0f-3c7a19d6b425",
+                  "productName": "Arroz grano largo",
+                  "unit": "G",
+                  "category": "Despensa",
+                  "desiredQuantity": 1000.000,
+                  "availableQuantity": 2500.000,
+                  "missingQuantity": 0.000,
+                  "status": "COMPLETE"
+                }
+              ]
+            }""";
 
     @Operation(
             summary = "Ver las plantillas del hogar",
@@ -378,5 +422,55 @@ public class PantryTemplateController {
             @PathVariable UUID templateId,
             @Valid @RequestBody ReplaceItemsRequest request) {
         return templates.replaceItems(householdId, templateId, request);
+    }
+
+    @Operation(
+            summary = "Ver qué falta para cumplir una plantilla",
+            description = """
+                    La feature central del módulo: la plantilla **menos** la despensa.
+
+                    Para cada línea, `missingQuantity = max(0, desiredQuantity - availableQuantity)`.
+                    Un producto que la plantilla quiere y que no está en la despensa cuenta como
+                    **cero disponible**, no desaparece: no tenerlo registrado y tenerlo a cero
+                    llevan a la misma compra.
+
+                    El faltante nunca es negativo. Tener de más no es tener que devolver.
+
+                    **Se calcula al vuelo y no se guarda.** Una lista de la compra almacenada
+                    empieza a mentir en cuanto alguien abre la nevera. Ésta es cierta en el
+                    instante que declara en `generatedAt`, y no pretende serlo después.
+
+                    **El orden es el del supermercado**: primero lo que falta, agrupado por
+                    categoría, y después lo que ya está cubierto. Dentro de cada grupo, por
+                    nombre, para que dos lecturas seguidas no reordenen la lista.
+
+                    **`desiredQuantity` no es `parLevel`.** El nivel objetivo de la despensa
+                    responde «¿voy bien de esto, siempre?»; esta cantidad responde «¿cuánto
+                    quiere ESTA lista?». Ninguna se deriva de la otra, y este cálculo no lee
+                    `par_level` en ningún momento.
+                    """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "El reporte, calculado ahora.",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = TemplateReportResponse.class),
+                            examples = @ExampleObject(name = "conFaltantes", value = EXAMPLE_REPORT))),
+            @ApiResponse(responseCode = "401", description = "Falta el access token, o no es válido.",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "sinToken", value = EXAMPLE_UNAUTHORIZED))),
+            @ApiResponse(responseCode = "404", description = TEMPLATE_NOT_FOUND_DESCRIPTION,
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "plantillaAjena", value = EXAMPLE_NOT_FOUND)))
+    })
+    @GetMapping(path = "/{templateId}/report", produces = MediaType.APPLICATION_JSON_VALUE)
+    public TemplateReportResponse report(
+            @Parameter(description = "Identificador del hogar.",
+                    example = "8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98")
+            @PathVariable UUID householdId,
+            @Parameter(description = "Identificador de la plantilla.",
+                    example = "3f7c1a90-9d4e-4b22-8f61-2c5a7e0d4b13")
+            @PathVariable UUID templateId) {
+        return reports.of(householdId, templateId);
     }
 }
