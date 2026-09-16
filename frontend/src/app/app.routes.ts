@@ -6,6 +6,7 @@ import { AuthService } from './core/auth/auth.service';
 import { HouseholdContextService } from './core/household/household-context.service';
 import { householdAdminGuard, householdGuard } from './core/household/household.guard';
 import { MyJoinRequestsService } from './core/household/my-join-requests.service';
+import { unsavedChangesGuard } from './features/templates/unsaved-changes.guard';
 import { environment } from '../environments/environment';
 
 /**
@@ -72,6 +73,21 @@ const householdSections: Routes = [
     path: 'templates',
     title: 'Plantillas · Cellier',
     loadComponent: () => import('./features/templates/templates-page').then((m) => m.TemplatesPage),
+  },
+  {
+    path: 'templates/:templateId',
+    title: 'Editar plantilla · Cellier',
+    // El guard vive en la ruta y no dentro de la pantalla porque sólo el router sabe que
+    // alguien se está yendo. `beforeunload` cubre cerrar la pestaña, no navegar.
+    canDeactivate: [unsavedChangesGuard],
+    loadComponent: () =>
+      import('./features/templates/template-editor-page').then((m) => m.TemplateEditorPage),
+  },
+  {
+    path: 'templates/:templateId/report',
+    title: 'Qué falta · Cellier',
+    loadComponent: () =>
+      import('./features/templates/report-page').then((m) => m.ReportPage),
   },
   {
     path: 'recipes',

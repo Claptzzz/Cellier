@@ -41,9 +41,9 @@ for (const width of [375, 1440]) {
     const context = await browser.newContext({ viewport: { width, height: 812 } });
     const page = await context.newPage();
     await page.route('**/api/v1/me', json(PERFIL));
-    await page.route('**/members', json(miembros));
-    await page.route('**/join-requests**', json([]));
-    await page.route(`**/households/${HID}`, json({
+    await page.route('**/api/v1/households/*/members', json(miembros));
+    await page.route('**/api/v1/**/join-requests**', json([]));
+    await page.route(`**/api/v1/households/${HID}`, json({
       id: HID, name: 'Casa Rivas', joinCode: 'K7M2QP9X',
       role: 'ADMIN', memberCount: 30, createdAt: '2026-09-01T10:00:00Z',
     }));

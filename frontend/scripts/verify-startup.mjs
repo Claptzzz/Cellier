@@ -45,7 +45,7 @@ async function arranca({ nombre, rutas, esperaMs = 6000, reintento = false }) {
   }
   // El chasis pide la bandeja del hogar activo para el distintivo de pendientes. Sin
   // simularla sale al backend real y el 401 acaba cerrando la sesion.
-  await page.route('**/households/*/join-requests**', (r) =>
+  await page.route('**/api/v1/households/*/join-requests**', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.addInitScript(() => localStorage.setItem('cellier.refreshToken', 'token-de-prueba'));
 

@@ -22,6 +22,9 @@ const ICONS = [
   'x-circle',
   // Modulo de hogares (Incremento 3). Se anaden juntos para no regenerar este
   // archivo una vez por pantalla.
+  // Reporte de compras (Incremento 8): la lista se imprime, y para eso hace falta
+  // un icono que diga impresora. Reutilizar el de lista decia otra cosa.
+  'printer',
   'copy',              // copiar el codigo de invitacion
   'share-network',     // compartir nativo, con navigator.share
   'arrows-clockwise',  // regenerar el codigo

@@ -50,14 +50,18 @@ const SIZES: Record<ButtonSize, string> = {
       <span class="truncate"><ng-content /></span>
     </ng-template>
 
-    @if (link(); as destino) {
+    <!-- Un enlace DESHABILITADO cae a la rama del botón a propósito. El atributo
+         aria-disabled en un <a> es sólo un anuncio: el elemento sigue navegando con el
+         ratón, con Enter y con el menú contextual. Un control que se ve apagado y funciona
+         igual es peor que uno que no se apaga, porque promete algo que no cumple. Un
+         <button disabled> sí es inerte para ratón, teclado y tecnología asistiva. -->
+    @if (navigable(); as destino) {
       <!-- Navegar es seguir un enlace, no pulsar un botón. Con <a> el lector de pantalla
            lo anuncia como enlace y se puede abrir en otra pestaña; con <button> se
            pierden las dos cosas. -->
       <a
         [routerLink]="destino"
-        [class]="classes()"
-        [attr.aria-disabled]="disabled() ? 'true' : null">
+        [class]="classes()">
         <ng-container [ngTemplateOutlet]="contenido" />
       </a>
     } @else {
@@ -106,6 +110,14 @@ export class Button {
   readonly link = input<readonly string[] | string | null>(null);
 
   readonly pressed = output<MouseEvent>();
+
+  /**
+   * El destino, sólo si de verdad se puede ir.
+   *
+   * Un enlace deshabilitado no es un enlace: cae a la rama del botón, que sí es inerte.
+   */
+  protected readonly navigable = computed(() =>
+    (this.disabled() || this.loading()) ? null : this.link());
 
   protected readonly classes = computed(() =>
     [

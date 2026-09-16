@@ -162,6 +162,9 @@ const MIN_SEARCH = 1;
     .sugerencia {
       display: flex;
       width: 100%;
+      /* El relleno dejaba estos botones en 43px: un pixel por debajo del minimo. Un
+         minimo escrito manda mas que un relleno que casualmente suma. */
+      min-height: var(--touch-min);
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;

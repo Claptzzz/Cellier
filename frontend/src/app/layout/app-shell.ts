@@ -45,6 +45,7 @@ const EXTRA_SECTIONS: Record<string, string> = {
 
       <!-- ============ SIDEBAR (≥1024px) ============ -->
       <aside
+        data-print="hide"
         class="hidden lg:flex lg:w-[var(--sidebar-w)] lg:flex-none lg:flex-col
                lg:border-r lg:border-border lg:bg-surface-raised">
 
@@ -102,6 +103,7 @@ const EXTRA_SECTIONS: Record<string, string> = {
       <div class="flex min-w-0 flex-1 flex-col">
 
         <header
+          data-print="hide"
           class="sticky top-0 z-40 flex h-[var(--header-h)] flex-none items-center gap-2
                  border-b border-border bg-surface/95 px-3 backdrop-blur
                  supports-[backdrop-filter]:bg-surface/80 lg:px-6">
@@ -146,6 +148,7 @@ const EXTRA_SECTIONS: Record<string, string> = {
 
       <!-- ============ NAVEGACIÓN INFERIOR (<1024px) ============ -->
       <nav
+        data-print="hide"
         class="fixed inset-x-0 bottom-0 z-40 flex-none border-t border-border
                bg-surface-raised/95 backdrop-blur lg:hidden
                pb-[env(safe-area-inset-bottom)]"
@@ -303,13 +306,21 @@ export class AppShell {
     if (last === 'settings') {
       return SETTINGS_DESTINATION.label;
     }
-    return (
-      NAV_DESTINATIONS.find((destination) => destination.segment === last)?.label ??
-      // Secciones que no están en la navegación pero sí tienen nombre propio. Sin esto la
-      // cabecera de escritorio rotulaba "Cellier", que no dice dónde estás.
-      EXTRA_SECTIONS[last] ??
-      'Cellier'
-    );
+
+    // Se prueba el último segmento y, si no dice nada, el anterior. Una pantalla de detalle
+    // —/templates/:id— termina en un identificador que no rotula nada, pero pertenece a la
+    // sección que lo precede. Sin este segundo intento, la cabecera de escritorio decía
+    // "Cellier" en cuanto se abría un detalle, que es no decir dónde estás.
+    for (const segment of [last, segments.at(-2) ?? '']) {
+      const label =
+        NAV_DESTINATIONS.find((destination) => destination.segment === segment)?.label ??
+        // Secciones que no están en la navegación pero sí tienen nombre propio.
+        EXTRA_SECTIONS[segment];
+      if (label) {
+        return label;
+      }
+    }
+    return 'Cellier';
   });
 
   protected readonly destinations = NAV_DESTINATIONS;

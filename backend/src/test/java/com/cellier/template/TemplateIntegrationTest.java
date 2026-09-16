@@ -11,7 +11,10 @@ import com.cellier.identity.GoogleTokenVerifier;
 import com.cellier.identity.RefreshTokenRepository;
 import com.cellier.identity.UserRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -87,6 +90,9 @@ class TemplateIntegrationTest {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
 
     @MockitoBean
     private GoogleTokenVerifier googleTokenVerifier;
@@ -201,7 +207,62 @@ class TemplateIntegrationTest {
                     .andExpect(jsonPath("$[0].name").value("Asado del domingo"))
                     .andExpect(jsonPath("$[0].itemCount").value(0))
                     .andExpect(jsonPath("$[1].name").value("Compra semanal"))
-                    .andExpect(jsonPath("$[1].itemCount").value(2));
+                    .andExpect(jsonPath("$[1].itemCount").value(2))
+                    .andExpect(jsonPath("$[1].createdByName").value("Ana Rivas"));
+        }
+
+        /**
+         * El autor sale del mismo viaje que el recuento.
+         *
+         * <p>Se compara el coste consigo mismo en vez de fijar un número: lo que hay que
+         * impedir es que crezca con las plantillas. Pedir el detalle de cada una para sacar el
+         * nombre del autor —que es la alternativa cómoda desde el cliente— daría una consulta
+         * por fila y este test se caería.
+         */
+        @Test
+        @DisplayName("la lista no cuesta más por tener más plantillas")
+        void costeConstante() throws Exception {
+            crear(ana, casaRivas, "Primera", linea(huevos, "10")).andExpect(status().isCreated());
+            long costeDeUna = sentenciasDelListado(1);
+
+            for (int i = 0; i < 4; i++) {
+                crear(ana, casaRivas, "Plantilla " + i, linea(salsa, "500"))
+                        .andExpect(status().isCreated());
+            }
+            long costeDeCinco = sentenciasDelListado(5);
+
+            assertThat(costeDeCinco)
+                    .describedAs("cinco plantillas cuestan lo mismo que una: el autor viene en el join")
+                    .isEqualTo(costeDeUna);
+        }
+
+        private long sentenciasDelListado(int esperadas) throws Exception {
+            Statistics estadisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+            estadisticas.clear();
+
+            mockMvc.perform(get(ruta(casaRivas)).header(HttpHeaders.AUTHORIZATION, "Bearer " + ana))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(esperadas));
+
+            return estadisticas.getPrepareStatementCount();
+        }
+
+        @Test
+        @Transactional
+        @DisplayName("si quien la creó se dio de baja, la plantilla sigue siendo del hogar")
+        void autorSinNombre() throws Exception {
+            hacerMiembro(bruno, casaRivas);
+            crear(bruno, casaRivas, "La de Bruno").andExpect(status().isCreated());
+
+            // La autoría es un dato, no una autoridad: se pierde sin llevarse la plantilla.
+            entityManager.createNativeQuery(
+                            "update pantry_templates set created_by = null where name = 'La de Bruno'")
+                    .executeUpdate();
+
+            mockMvc.perform(get(ruta(casaRivas)).header(HttpHeaders.AUTHORIZATION, "Bearer " + ana))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].name").value("La de Bruno"))
+                    .andExpect(jsonPath("$[0].createdByName").doesNotExist());
         }
 
         @Test

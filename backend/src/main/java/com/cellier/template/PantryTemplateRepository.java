@@ -19,14 +19,20 @@ public interface PantryTemplateRepository extends JpaRepository<PantryTemplate, 
      *
      * <p>Contar en Java obligaría a traer todas las líneas de todas las plantillas para
      * mirarles el tamaño y tirarlas: el recuento es lo único que la lista necesita de ellas.
+     *
+     * <p>El autor entra por un {@code left join} y no por una consulta aparte, ni por pedir el
+     * detalle de cada plantilla desde el cliente: son N peticiones por pantalla para un dato
+     * que cabe en una columna más. Es {@code left} porque la autoría queda en nulo cuando esa
+     * persona se da de baja, y la plantilla sigue siendo del hogar.
      */
     @Query("""
             select new com.cellier.template.dto.TemplateSummaryResponse(
-                t.id, t.name, count(i.id), t.createdAt, t.updatedAt)
+                t.id, t.name, count(i.id), autor.displayName, t.createdAt, t.updatedAt)
             from PantryTemplate t
             left join t.items i
+            left join t.createdBy autor
             where t.household.id = :householdId
-            group by t.id, t.name, t.createdAt, t.updatedAt
+            group by t.id, t.name, autor.displayName, t.createdAt, t.updatedAt
             order by lower(t.name) asc, t.id asc
             """)
     List<TemplateSummaryResponse> findAllOf(@Param("householdId") UUID householdId);
