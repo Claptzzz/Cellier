@@ -116,23 +116,28 @@ import type { NameIntent } from './template-name-dialog';
                 <!-- En escritorio, panel anclado a la fila. En móvil, hoja inferior: un
                      panel anclado a la última fila de una lista larga acaba abajo del todo,
                      lejos de lo que lo abrió y sin decir sobre qué actúa. -->
-                @if (isDesktop()) {
-                  <ui-menu
-                    [open]="openMenu() === template.id"
-                    align="end"
-                    [label]="'Acciones sobre ' + template.name"
-                    (closed)="openMenu.set(null)">
-                    <div class="flex flex-col p-1">
-                      <ng-container *ngTemplateOutlet="acciones; context: { $implicit: template }" />
-                    </div>
-                  </ui-menu>
-                }
+                <!-- El relative va en un contenedor ajustado al disparador, no en la fila:
+                     el panel se ancla al bloque contenedor y toma de el su ancho minimo. -->
+                <div class="relative shrink-0">
+                  @if (isDesktop()) {
+                    <ui-menu
+                      [open]="openMenu() === template.id"
+                      align="end"
+                      [label]="'Acciones sobre ' + template.name"
+                      [title]="template.name"
+                      (closed)="openMenu.set(null)">
+                      <div class="flex flex-col p-1">
+                        <ng-container *ngTemplateOutlet="acciones; context: { $implicit: template }" />
+                      </div>
+                    </ui-menu>
+                  }
 
-                <ui-icon-button
-                  name="dots-three"
-                  [label]="'Acciones sobre ' + template.name"
-                  [pressedState]="openMenu() === template.id"
-                  (pressed)="openMenu.set(openMenu() === template.id ? null : template.id)" />
+                  <ui-icon-button
+                    name="dots-three"
+                    [label]="'Acciones sobre ' + template.name"
+                    [pressedState]="openMenu() === template.id"
+                    (pressed)="openMenu.set(openMenu() === template.id ? null : template.id)" />
+                </div>
               </div>
             </li>
           }

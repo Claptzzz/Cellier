@@ -45,6 +45,7 @@ const EXTRA_SECTIONS: Record<string, string> = {
 
       <!-- ============ SIDEBAR (≥1024px) ============ -->
       <aside
+        data-print="hide"
         class="hidden lg:flex lg:w-[var(--sidebar-w)] lg:flex-none lg:flex-col
                lg:border-r lg:border-border lg:bg-surface-raised">
 
@@ -102,6 +103,7 @@ const EXTRA_SECTIONS: Record<string, string> = {
       <div class="flex min-w-0 flex-1 flex-col">
 
         <header
+          data-print="hide"
           class="sticky top-0 z-40 flex h-[var(--header-h)] flex-none items-center gap-2
                  border-b border-border bg-surface/95 px-3 backdrop-blur
                  supports-[backdrop-filter]:bg-surface/80 lg:px-6">
@@ -146,6 +148,7 @@ const EXTRA_SECTIONS: Record<string, string> = {
 
       <!-- ============ NAVEGACIÓN INFERIOR (<1024px) ============ -->
       <nav
+        data-print="hide"
         class="fixed inset-x-0 bottom-0 z-40 flex-none border-t border-border
                bg-surface-raised/95 backdrop-blur lg:hidden
                pb-[env(safe-area-inset-bottom)]"

@@ -84,6 +84,12 @@ const householdSections: Routes = [
       import('./features/templates/template-editor-page').then((m) => m.TemplateEditorPage),
   },
   {
+    path: 'templates/:templateId/report',
+    title: 'Qué falta · Cellier',
+    loadComponent: () =>
+      import('./features/templates/report-page').then((m) => m.ReportPage),
+  },
+  {
     path: 'recipes',
     title: 'Recetas · Cellier',
     loadComponent: () => import('./features/recipes/recipes-page').then((m) => m.RecipesPage),

@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { SKIP_ERROR_TOAST } from '../auth/error.interceptor';
+import type { TemplateReport } from './report.models';
 import type { TemplateDetail, TemplateItemInput, TemplateSummary } from './template.models';
 
 /**
@@ -71,6 +72,20 @@ export class TemplateApi {
     return this.http.put<TemplateDetail>(
       `${this.base(householdId)}/${templateId}/items`,
       { items },
+      { context: this.handledByCaller },
+    );
+  }
+
+  /**
+   * El reporte de compras, calculado ahora.
+   *
+   * <p>No se cachea en ningún sitio, ni entre sesiones ni dentro de una: el sentido de la
+   * pantalla es reflejar el stock de este momento, y un reporte guardado empieza a mentir en
+   * cuanto alguien abre la nevera.
+   */
+  report(householdId: string, templateId: string): Observable<TemplateReport> {
+    return this.http.get<TemplateReport>(
+      `${this.base(householdId)}/${templateId}/report`,
       { context: this.handledByCaller },
     );
   }

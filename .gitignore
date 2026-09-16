@@ -26,7 +26,15 @@ frontend/src/environments/environment.prod.ts
 
 # --- IDEs ---
 .idea/
-.vscode/
+# `.vscode/` a secas excluia el DIRECTORIO, y git no desciende a un directorio excluido:
+# eso anulaba en silencio las negaciones de frontend/.gitignore, que si querian versionar
+# la configuracion compartida del editor. Se ignora el CONTENIDO para que las negaciones
+# de abajo puedan aplicarse.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 *.iml
 *.ipr
 *.iws
@@ -44,6 +52,12 @@ Thumbs.db
 logs/
 *.pid
 
-# Docs internos y skills de Claude
-docs/
+# La documentacion del proyecto SI se versiona: ADRs, reglas de dominio, sistema de
+# diseno y las dos guias del arnes son buena parte de lo que este repositorio entrega
+# como memoria. Estuvieron fuera ocho incrementos por esta linea.
+# Lo que no va son las capturas del arnes: 206 ficheros y 24 MB regenerados en cada pasada.
+# Son salida, no documentacion.
+docs/ui-shots/
+
+# Skills de Claude de terceros, traidas de fuera. No son trabajo del proyecto.
 .claude/skills/

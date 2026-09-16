@@ -144,36 +144,6 @@ for (const theme of THEMES) {
   }
 }
 
-// ---- Holgura del FAB sobre la última fila -----------------------------------
-{
-  const { context, page } = await makePage(375, 812, 'light');
-  await page.addInitScript(() => localStorage.setItem('cellier.refreshToken', 'shot-token'));
-  await page.goto(BASE + '/dev/ui', { waitUntil: 'networkidle' });
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(500);
-
-  const geometry = await page.evaluate(() => {
-    const fab = document.querySelector('button[aria-label="Añadir artículo"]');
-    const nav = document.querySelector('nav[aria-label="Secciones"]');
-    const main = document.querySelector('main');
-    const last = main?.lastElementChild?.lastElementChild ?? null;
-    const box = (el) => (el ? el.getBoundingClientRect() : null);
-    const lastContent = main ? main.querySelectorAll('section') : [];
-    const tail = lastContent.length ? lastContent[lastContent.length - 1] : null;
-    return {
-      fab: box(fab),
-      nav: box(nav),
-      lastSectionBottom: tail ? tail.getBoundingClientRect().bottom : null,
-      viewportH: window.innerHeight,
-      mainPaddingBottom: main ? getComputedStyle(main).paddingBottom : null,
-    };
-  });
-
-  await page.screenshot({ path: OUT + 'fab-clearance-375-light.png' });
-  results.push({ name: 'fab-clearance-375-light.png', geometry });
-  await context.close();
-}
-
 // ---- Onboarding: los dos caminos, el codigo recien creado y la sala de espera ----
 // Cada pantalla necesita un backend distinto, asi que no encajan en el bucle de PAGES.
 const SIN_HOGARES = { ...PROFILE, households: [] };
@@ -784,12 +754,105 @@ const ESCENAS_PLANTILLAS = [
     slug: 'plantillas-acciones',
     datos: PLANTILLAS,
     sinPaginaEntera: true,
-    async interactuar(page) {
+    async interactuar(page, label) {
       await page.getByRole('button', { name: /Acciones sobre Compra semanal/ }).first().click();
       await page.waitForTimeout(400);
+      return medirAcciones(page, label);
     },
   },
 ];
+
+/**
+ * Un menu abierto en el sitio equivocado no desborda el documento, no oculta nada y no
+ * tira ningun error: la captura lo retrata y nadie lo mira. Esta escena existia desde el
+ * PR A y el fallo salia en ella. Lo que faltaba era esto: afirmar donde tiene que estar.
+ *
+ * En escritorio, panel anclado junto al disparador. En movil, hoja modal a ancho completo
+ * con fondo atenuado y el resto inerte.
+ */
+async function medirAcciones(page, label) {
+  const m = await page.evaluate(() => {
+    const disparador = [...document.querySelectorAll('button')].find((b) =>
+      (b.getAttribute('aria-label') ?? '').startsWith('Acciones sobre Compra semanal'));
+    const panel = document.querySelector('.ui-menu-panel');
+    const hoja = document.querySelector('dialog.ui-sheet[open]');
+    const caja = (e) => {
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { x: r.x, y: r.y, w: r.width, h: r.height, top: r.top, bottom: r.bottom,
+               left: r.left, right: r.right };
+    };
+    const flotante = panel ?? hoja?.querySelector('.ui-sheet-panel') ?? null;
+    const r = flotante?.getBoundingClientRect();
+    let enElCentro = null;
+    if (r && r.width > 0) {
+      const golpe = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      enElCentro = golpe === flotante ? 'el propio panel'
+        : flotante.contains(golpe) ? 'dentro del panel'
+        : 'TAPADO por ' + (golpe ? golpe.tagName + '.' + String(golpe.className).slice(0, 30) : 'nada');
+    }
+    // El primero VISIBLE: en 375 el enlace del sidebar de escritorio existe con caja de
+    // 0x0, y medir sobre el hacia que la comprobacion se contestara sola.
+    const debajo = [...document.querySelectorAll('aside a, nav[aria-label] a')]
+      .find((a) => a.getBoundingClientRect().width > 0) ?? null;
+    return {
+      hayPanel: !!panel, hayHoja: !!hoja,
+      panel: caja(flotante), disparador: caja(disparador),
+      // `offsetParent` body significa que el panel perdio su bloque contenedor.
+      anclaEsBody: panel ? (panel.offsetParent === document.body || !panel.offsetParent) : null,
+      titulo: document.querySelector('.ui-menu-title')?.textContent?.trim()
+        ?? hoja?.querySelector('h2')?.textContent?.trim() ?? null,
+      navTapada: (() => {
+        if (!debajo) return 'SIN NAVEGACION QUE COMPROBAR';
+        const r = debajo.getBoundingClientRect();
+        const golpe = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (golpe === null || golpe === debajo || debajo.contains(golpe)) {
+          return 'ALCANZABLE: ' + debajo.textContent.trim().slice(0, 24);
+        }
+        if (golpe === hoja) return 'tapada por el ::backdrop';
+        if (hoja?.contains(golpe)) return 'tapada por la hoja';
+        return 'tapada por ' + golpe.tagName;
+      })(),
+      vp: { w: innerWidth, h: innerHeight },
+    };
+  });
+
+  const fallos = [];
+  const p = m.panel;
+  if (!p) return ['no se abrio ningun panel'];
+
+  if (m.titulo !== 'Compra semanal') {
+    fallos.push(`el panel no se titula con la plantilla (titulo=${JSON.stringify(m.titulo)})`);
+  }
+  if (m.enElCentro?.startsWith('TAPADO')) fallos.push(`elementFromPoint en el centro: ${m.enElCentro}`);
+  if (p.top < 0 || p.left < 0 || p.right > m.vp.w || p.bottom > m.vp.h) {
+    fallos.push(`el panel se sale de vista: ${JSON.stringify(p)} en ${JSON.stringify(m.vp)}`);
+  }
+
+  if (label === '1440') {
+    if (!m.hayPanel) fallos.push('en 1440 tiene que ser panel anclado, no hoja inferior');
+    if (m.anclaEsBody) fallos.push('el panel no tiene ancestro posicionado: se ancla al viewport');
+    if (p.w > 360) fallos.push(`el panel mide ${Math.round(p.w)}px de ancho: no esta anclado al disparador`);
+    // Anclado significa junto al disparador, no en cualquier sitio de la pantalla.
+    const d = m.disparador;
+    if (d) {
+      if (Math.abs(p.right - d.right) > 4) {
+        fallos.push(`el panel no se alinea por la derecha con el disparador (${Math.round(p.right)} vs ${Math.round(d.right)})`);
+      }
+      const separacion = Math.min(Math.abs(p.top - d.bottom), Math.abs(d.top - p.bottom));
+      if (separacion > 24) fallos.push(`el panel esta a ${Math.round(separacion)}px del disparador`);
+    }
+  } else {
+    if (!m.hayHoja) fallos.push('en 375 tiene que ser hoja inferior modal');
+    // Sin nada que comprobar la comprobacion no se omite: se reporta. Una hoja modal que
+    // deja la navegacion pulsable y una sonda que no encuentra navegacion se parecen
+    // demasiado si la segunda calla.
+    if (!String(m.navTapada).startsWith('tapada')) {
+      fallos.push(`la hoja modal no cubre la navegacion de debajo (${m.navTapada})`);
+    }
+  }
+  return fallos;
+}
 
 for (const escena of ESCENAS_PLANTILLAS) {
   for (const [label, vp] of Object.entries(VIEWPORTS)) {
@@ -798,6 +861,10 @@ for (const escena of ESCENAS_PLANTILLAS) {
         viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
       });
       const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') erroresConsola.push('error en consola: ' + m.text().split('\n')[0].slice(0, 180));
+      });
       await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PROFILE));
       // El patron va a la ruta de la API y NO a '**/templates**' a secas: eso tambien
@@ -815,13 +882,14 @@ for (const escena of ESCENAS_PLANTILLAS) {
 
       await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/templates`, { waitUntil: 'commit' });
       await page.waitForTimeout(escena.esperaMs ?? 1100);
-      if (escena.interactuar) await escena.interactuar(page, label);
+      const problemas = escena.interactuar ? ((await escena.interactuar(page, label)) ?? []) : [];
+      problemas.push(...erroresConsola);
 
       const name = `${escena.slug}-${label}-${theme}.png`;
       await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      results.push({ name, overflowPx: overflow });
+      results.push({ name, overflowPx: overflow, ...(problemas.length ? { problemas } : {}) });
       await context.close();
     }
   }
@@ -853,7 +921,7 @@ const ESCENAS_EDITOR = [
     sinPaginaEntera: true,
     async interactuar(page) {
       await page.route('**/api/v1/households/*/products**', json([
-        { id: 'p9', name: 'Pan de molde', unit: 'UNIT', category: 'Panaderia' },
+        { id: 'p9', name: 'Pan de molde', unit: 'UNIT', category: 'Panadería' },
         { id: 'p8', name: 'Papas', unit: 'KG', category: 'Frescos' },
       ]));
       await page.getByLabel(/Agregar un producto/).fill('pa');
@@ -889,6 +957,10 @@ for (const escena of ESCENAS_EDITOR) {
         viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
       });
       const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') erroresConsola.push('error en consola: ' + m.text().split('\n')[0].slice(0, 180));
+      });
       await page.route('**/api/**', json([]));
       await page.route('**/api/v1/me', json(PROFILE));
       await page.route('**/api/v1/households/*/templates/*', json(escena.detalle));
@@ -899,17 +971,210 @@ for (const escena of ESCENAS_EDITOR) {
 
       await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/templates/t1`, { waitUntil: 'commit' });
       await page.waitForTimeout(1100);
-      if (escena.interactuar) await escena.interactuar(page, label);
+      const problemas = escena.interactuar ? ((await escena.interactuar(page, label)) ?? []) : [];
+      problemas.push(...erroresConsola);
 
       const name = `${escena.slug}-${label}-${theme}.png`;
       await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      results.push({ name, overflowPx: overflow });
+      results.push({ name, overflowPx: overflow, ...(problemas.length ? { problemas } : {}) });
       await context.close();
     }
   }
 }
 
+
+// ---- Reporte de compras -----------------------------------------------------
+const linea = (nombre, categoria, deseado, hay) => ({
+  productId: nombre, productName: nombre, unit: 'UNIT', category: categoria,
+  desiredQuantity: deseado, availableQuantity: hay,
+  missingQuantity: Math.max(0, deseado - hay),
+  status: hay >= deseado ? 'COMPLETE' : 'MISSING',
+});
+
+const REPORTE = {
+  templateId: 't1', templateName: 'Compra semanal',
+  generatedAt: '2026-09-15T14:30:00Z',
+  summary: { totalItems: 7, missingItems: 4, completionRate: 0.43 },
+  items: [
+    linea('Huevos', 'Frescos', 10, 4),
+    linea('Leche entera', 'Frescos', 2, 0),
+    linea('Lechuga', 'Frescos', 2, 1),
+    linea('Pan de molde', 'Panadería', 2, 0),
+    linea('Arroz grano largo', 'Despensa', 1000, 2500),
+    linea('Salsa de tomate', 'Despensa', 1000, 1000),
+    linea('Sal', undefined, 500, 500),
+  ],
+};
+
+const REPORTE_COMPLETO = {
+  ...REPORTE,
+  summary: { totalItems: 3, missingItems: 0, completionRate: 1 },
+  items: [
+    linea('Huevos', 'Frescos', 10, 12),
+    linea('Arroz grano largo', 'Despensa', 1000, 2500),
+    linea('Sal', undefined, 500, 500),
+  ],
+};
+
+const ESCENAS_REPORTE = [
+  { slug: 'reporte', datos: REPORTE },
+  { slug: 'reporte-sin-faltantes', datos: REPORTE_COMPLETO },
+  {
+    slug: 'reporte-marcando',
+    datos: REPORTE,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      const casillas = page.locator('input[type="checkbox"]');
+      await casillas.nth(0).check();
+      await casillas.nth(2).check();
+      await page.waitForTimeout(250);
+    },
+  },
+  {
+    slug: 'reporte-completos-abierto',
+    datos: REPORTE,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.locator('details summary').click();
+      await page.waitForTimeout(300);
+    },
+  },
+  { slug: 'reporte-impresion', datos: REPORTE, impresion: true },
+];
+
+for (const escena of ESCENAS_REPORTE) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      // La vista de impresion sale una sola vez: el papel no tiene tema ni ancho de pantalla.
+      if (escena.impresion && !(label === '1440' && theme === 'light')) continue;
+
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') erroresConsola.push('error en consola: ' + m.text().split('\n')[0].slice(0, 180));
+      });
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      await page.route('**/api/v1/households/*/templates/*/report', json(escena.datos));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/templates/t1/report`, { waitUntil: 'commit' });
+      await page.waitForTimeout(1200);
+      if (escena.interactuar) await escena.interactuar(page, label);
+
+      if (escena.impresion) {
+        // El medio de impresion se emula: es la unica forma de ver la hoja @media print
+        // sin abrir el dialogo del sistema.
+        await page.emulateMedia({ media: 'print' });
+        await page.waitForTimeout(250);
+      }
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: escena.impresion || (label === '375' && !escena.sinPaginaEntera) });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+      const problemas = [...erroresConsola];
+      if (escena.impresion) {
+        // Lo que la hoja de impresion tiene que conseguir, medido y no mirado.
+        const impreso = await page.evaluate(() => {
+          const visible = (sel) => [...document.querySelectorAll(sel)].some((el) => el.checkVisibility());
+          return {
+            navegacion: visible('nav'),
+            barra: visible('[data-completitud]'),
+            titulo: visible('h1'),
+            botones: visible('[data-print="hide"]'),
+            fondoBlanco: getComputedStyle(document.body).backgroundColor,
+            lineas: document.querySelectorAll('section li').length,
+          };
+        });
+        if (impreso.navegacion) problemas.push('la navegacion se imprime');
+        if (impreso.barra) problemas.push('la barra de completitud se imprime');
+        if (!impreso.titulo) problemas.push('la hoja sale sin titulo');
+        if (impreso.botones) problemas.push('los botones de accion se imprimen');
+        if (!impreso.fondoBlanco.includes('255, 255, 255')) problemas.push('el fondo no es blanco');
+        if (impreso.lineas === 0) problemas.push('no se imprime ninguna linea de la lista');
+      }
+
+      results.push({ name, overflowPx: overflow, problemas });
+      await context.close();
+    }
+  }
+}
+
+// ---- Holgura del boton flotante sobre la ultima fila -------------------------
+// Esta comprobacion estuvo MIDIENDO NADA desde que se escribio: apuntaba a /dev/ui, donde
+// el boton flotante no existe —solo lo pinta la despensa—, y ademas buscaba una etiqueta
+// que cambio en el Incremento 6. Devolvia { fab: null } y nadie se enteraba, porque el
+// script se limitaba a imprimirlo. Ahora mide donde el boton existe y FALLA si no lo
+// encuentra: una comprobacion que solo sabe decir que si no se distingue de una rota.
+{
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  await page.route('**/api/**', json([]));
+  await page.route('**/api/v1/me', json(PROFILE));
+  await page.route('**/api/v1/households/*/pantry/items**', json(
+    Array.from({ length: 8 }, (_, i) => ({
+      id: `h${i}`,
+      product: { id: `p${i}`, name: `Producto ${i}`, unit: 'UNIT', category: 'Despensa' },
+      quantity: 3, parLevel: null, version: 0,
+    }))));
+  await page.addInitScript(() => localStorage.setItem('cellier.refreshToken', 'shot-token'));
+  await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
+  await page.waitForSelector('app-pantry-row', { timeout: 15000 });
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(500);
+
+  const geometry = await page.evaluate(() => {
+    const fab = document.querySelector('button[aria-label="Agregar producto"]');
+    const nav = document.querySelector('nav[aria-label="Secciones"], footer nav, nav');
+    const filas = [...document.querySelectorAll('app-pantry-row')];
+    const ultima = filas.at(-1);
+    const box = (el) => (el ? el.getBoundingClientRect().toJSON() : null);
+    return {
+      fab: box(fab),
+      nav: box(nav),
+      ultimaFila: box(ultima),
+      viewportH: window.innerHeight,
+    };
+  });
+
+  await page.screenshot({ path: OUT + 'fab-clearance-375-light.png' });
+
+  // Lo que de verdad hay que garantizar: que ni el boton ni la barra tapen la ultima fila.
+  const problemas = [];
+  if (!geometry.fab) problemas.push('no se encontro el boton flotante');
+  if (!geometry.nav) problemas.push('no se encontro la navegacion inferior');
+  if (!geometry.ultimaFila) problemas.push('no se encontro ninguna fila de despensa');
+  if (geometry.fab && geometry.ultimaFila && geometry.ultimaFila.bottom > geometry.fab.top) {
+    problemas.push('el boton flotante tapa la ultima fila');
+  }
+  results.push({ name: 'fab-clearance-375-light.png', geometry, problemas });
+  await context.close();
+}
+
 await browser.close();
 console.log(JSON.stringify(results, null, 2));
+
+// ---- El arnes tiene que saber decir que NO --------------------------------------
+// Sin esto, shots.mjs era un instrumento sin alarma: medía el desbordamiento y lo imprimía,
+// y descubrirlo dependía de que alguien leyera 175 objetos JSON con atencion. Una
+// herramienta de verificacion que solo sabe reportar exito no se distingue de una rota.
+const desbordes = results.filter((r) => r.overflowPx);
+const rotos = results.filter((r) => r.problemas?.length);
+
+if (desbordes.length || rotos.length) {
+  console.error('\nFALLOS:');
+  desbordes.forEach((r) => console.error(`  ${r.name}: desborda ${r.overflowPx}px en horizontal`));
+  rotos.forEach((r) => r.problemas.forEach((p) => console.error(`  ${r.name}: ${p}`)));
+  process.exit(1);
+}
+console.error(`\n${results.length} capturas, sin desbordes.`);

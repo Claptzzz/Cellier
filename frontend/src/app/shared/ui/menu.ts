@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  isDevMode,
   output,
   signal,
 } from '@angular/core';
@@ -34,6 +35,9 @@ import {
         [class.ui-menu-panel--above]="above()"
         role="group"
         [attr.aria-label]="label()">
+        @if (title(); as texto) {
+          <div class="ui-menu-title">{{ texto }}</div>
+        }
         <ng-content />
       </div>
     }
@@ -49,7 +53,11 @@ import {
       /* Al menos tan ancho como el disparador, pero con suelo propio: anclado a un
          disparador estrecho —el chip del hogar en la barra lateral— el contenido se
          partia en dos lineas y el texto de rol quedaba colgando. */
-      min-width: max(100%, 264px);
+      /* El minimo se acota con el propio maximo. min-width gana siempre a max-width
+         en CSS, asi que un contenedor ancho —o ninguno, cuando el consumidor olvida el
+         relative y el bloque contenedor pasa a ser el viewport— convertia este panel en
+         una banda a todo lo ancho que tapaba media pantalla sin desbordar nada. */
+      min-width: min(max(100%, 264px), 340px, calc(100vw - 24px));
       width: max-content;
       max-width: min(340px, calc(100vw - 24px));
       max-height: min(60dvh, 420px);
@@ -59,9 +67,28 @@ import {
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-2);
+      /* El input se llama align, que ademas es un atributo HTML de presentacion: el
+         navegador lo traduce a text-align en todo el subarbol, asi que align="end"
+         alineaba a la derecha el texto del panel. No se veia mientras el contenido era
+         todo filas flex; el titulo, que es un bloque, lo saco a la luz. */
+      text-align: start;
     }
 
     .ui-menu-panel--end { left: auto; right: 0; }
+
+    /* Sobre que actua el panel. En una lista de filas iguales, el panel flotante pierde
+       el vinculo con la fila que lo abrio en cuanto se mira dos segundos. */
+    .ui-menu-title {
+      padding: 6px 10px 8px;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     /* Abierto en la última fila de una lista, el panel se saldría por abajo. Se voltea
        para crecer hacia arriba desde el borde superior del disparador. */
@@ -85,6 +112,8 @@ export class Menu {
   readonly open = input(false);
   readonly label = input.required<string>();
   readonly align = input<'start' | 'end'>('start');
+  /** Titulo visible dentro del panel. Vacio, el panel no lo pinta. */
+  readonly title = input('');
 
   readonly closed = output<void>();
 
@@ -107,6 +136,7 @@ export class Menu {
       this.above.set(false);
 
       queueMicrotask(() => {
+        this.assertAnclado();
         this.placeVertically();
         // El foco entra en el panel: si se quedara en el disparador, un lector de
         // pantalla no anunciaría lo que acaba de aparecer.
@@ -138,6 +168,27 @@ export class Menu {
         document.removeEventListener('pointerdown', onPointerDown, true);
       });
     });
+  }
+
+  /**
+   * El panel esta `position: absolute`, asi que su bloque contenedor es el ancestro
+   * posicionado mas cercano. Si el consumidor no envuelve disparador y panel en un
+   * `relative`, ese ancestro pasa a ser el viewport y el panel se abre a todo lo ancho
+   * de la pantalla, lejos de lo que lo abrio. Eso no desborda el documento ni oculta
+   * nada, asi que ninguna comprobacion de visibilidad ni de desbordamiento lo delata:
+   * sale mal y en silencio. Aqui deja de ser silencioso.
+   */
+  private assertAnclado(): void {
+    if (!isDevMode()) {
+      return;
+    }
+    const padre = this.panel()?.offsetParent;
+    if (!padre || padre === document.body) {
+      throw new Error(
+        `ui-menu "${this.label()}" no tiene ancestro posicionado: envuelve el disparador ` +
+          'y el <ui-menu> en un contenedor con `position: relative` ajustado al disparador.',
+      );
+    }
   }
 
   private container(): HTMLElement | null {

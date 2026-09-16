@@ -16,13 +16,21 @@ const BASE = process.argv[2] ?? 'http://localhost:4300';
 const HID = '8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98';
 const OTRO = 'b41d0f77-6c58-4e92-8a03-5fd91c2e7a64';
 
+// Acciones que NO se pulsan porque son destructivas o irreversibles. El patron tiene que ser
+// preciso: `generar` a secas tambien casaba con "Generar reporte", que solo lee, y el
+// recorrido se negaba a seguir ese camino sin decirlo. Un patron ancho aqui es la misma clase
+// de omision silenciosa que un control que no se encuentra.
 const NO_PULSAR =
-  /expulsar|salir del hogar|generar|rechazar|aceptar|eliminar|retirar|quitar admin|hacer admin|compartir|copiar|cerrar sesi/i;
+  /expulsar|salir del hogar|generar un c\u00f3digo|rechazar|aceptar|eliminar|retirar|quitar admin|hacer admin|compartir|copiar|cerrar sesi/i;
+
+/** Lo que se decidio no pulsar, para que la decision se vea en el informe. */
+const omitidos = new Set();
 
 const PANTALLAS = [
   { nombre: 'despensa',            patron: /^\/h\/[^/]+\/pantry$/ },
   { nombre: 'plantillas',          patron: /^\/h\/[^/]+\/templates$/ },
   { nombre: 'editor de plantilla', patron: /^\/h\/[^/]+\/templates\/[^/]+$/ },
+  { nombre: 'reporte de compras',  patron: /^\/h\/[^/]+\/templates\/[^/]+\/report$/ },
   { nombre: 'recetas',             patron: /^\/h\/[^/]+\/recipes$/ },
   { nombre: 'hogar',               patron: /^\/h\/[^/]+\/home$/ },
   { nombre: 'administrar hogar',   patron: /^\/h\/[^/]+\/manage$/ },
@@ -83,6 +91,12 @@ async function nuevoContexto(width) {
   await page.route('**/api/v1/households/*/join-requests**', json(SOLICITUDES));
   await page.route('**/api/v1/households/*/templates', json(PLANTILLAS));
   await page.route('**/api/v1/households/*/templates/*', json(PLANTILLA));
+  await page.route('**/api/v1/households/*/templates/*/report', json({
+    templateId: 'tpl1', templateName: 'Compra semanal', generatedAt: '2026-09-15T14:30:00Z',
+    summary: { totalItems: 1, missingItems: 1, completionRate: 0 },
+    items: [{ productId: 'p1', productName: 'Huevos', unit: 'UNIT', category: 'Frescos',
+      desiredQuantity: 10, availableQuantity: 4, missingQuantity: 6, status: 'MISSING' }],
+  }));
   await page.route(`**/api/v1/households/${HID}`, json({
     id: HID, name: 'Casa Rivas', joinCode: 'K7M2QP9X', role: 'ADMIN',
     memberCount: 3, createdAt: '2026-09-01T10:00:00Z',
@@ -141,7 +155,9 @@ async function recorrer(width) {
     await page.waitForTimeout(800);
     const origen = new URL(page.url()).pathname;
     alcanzadas.add(origen);
-    const lista = (await controles(page)).filter((c) => !NO_PULSAR.test(c.nombre));
+    const todos = await controles(page);
+    todos.filter((c) => NO_PULSAR.test(c.nombre)).forEach((c) => omitidos.add(c.nombre));
+    const lista = todos.filter((c) => !NO_PULSAR.test(c.nombre));
     // A stderr: el informe va a stdout y se lee entero al final, pero un recorrido que
     // tarda de mas hay que poder mirarlo mientras corre para saber donde se atasca.
     process.stderr.write(`  [${width}px] ${origen}: ${lista.length} controles\n`);
@@ -204,6 +220,14 @@ for (const width of [375, 1440]) {
 }
 
 await browser.close();
+
+// Las omisiones deliberadas se enseñan: si aparece aqui algo que si deberia pulsarse, el
+// patron de NO_PULSAR esta de mas y se ve sin tener que sospecharlo.
+if (omitidos.size) {
+  console.log('\nNo se pulsaron, por destructivos o irreversibles:');
+  [...omitidos].sort().forEach((n) => console.log(`  - ${n}`));
+}
+
 console.log(huerfanas === 0
   ? '\nToda pantalla tiene al menos un camino de navegacion.'
   : `\n${huerfanas} pantalla(s) huerfana(s).`);
