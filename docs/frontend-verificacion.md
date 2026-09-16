@@ -177,13 +177,36 @@ antes de capturar, o leer el error de la consola de `ng serve`— y falle si no 
 la misma revisión que los 20 minutos del recorrido: las dos son deuda del arnés, no del
 producto.
 
-**Volvió a pasar en el Incremento 8.** Tras un error de compilación, el servidor de :4200
-se quedó con `<vite-error-overlay>` puesto y sirviendo el bundle anterior; la sonda medía
-una y otra vez la geometría vieja y parecía que el arreglo no funcionaba. Se resolvió
-levantando un `ng serve` limpio en :4300 y midiendo contra él. **Costumbre provisional:**
-ante cualquier medición que no cuadre con el archivo, levanta un servidor nuevo antes de
-seguir depurando. Y en la sonda, `<vite-error-overlay>` en el DOM es motivo suficiente para
-tirar la medición a la basura.
+**Pasó tres veces en el Incremento 8.** La tercera costó una hora revisando capturas de un
+arreglo que sí funcionaba: `min-height: 44px` estaba aplicado y medía 335×44 en el navegador,
+y el arnés seguía diciendo 43.
+
+### Resuelto: el arnés comprueba la frescura antes de capturar
+
+No basta con mirar el DOM: hay que **obligar al servidor a demostrar que puede recompilar**.
+
+1. `sync-environment.mjs` calcula una huella `sha256` del árbol `src/` —excluyendo
+   `src/environments/`, que depende de ella— y la escribe como `buildStamp` en el fichero de
+   entorno generado.
+2. `main.ts` la publica en `<html data-build>`.
+3. `shots.mjs`, antes de nada, **regenera el fichero de entorno** y espera hasta 40 s a que la
+   página anuncie esa misma huella. Si el árbol cambió, la huella cambia, el fichero cambia y
+   el servidor tiene que recompilar para converger.
+
+Si no converge, no hay capturas: el script muere nombrando las dos huellas. Y si encuentra
+`<vite-error-overlay>` en el DOM, muere diciendo que el servidor tiene un error de compilación
+y que mire su propia consola.
+
+La gracia de que sea una huella del contenido y no una fecha es que **no genera ruido**: si
+nadie tocó nada, la huella ya coincide y la comprobación pasa sin recompilar. Sólo exige algo
+cuando de verdad hay algo nuevo que servir.
+
+Falsificado: con un error de tipos metido a mano en `pantry-row.ts`, el arnés sale con
+
+```
+Error: Lo servido no es lo que hay en disco: la pagina anuncia 83f2dcfb404a y el arbol de
+fuentes es 7b9a7c950e52. El servidor no ha conseguido recompilar en 40s.
+```
 
 ## Una herramienta que sólo sabe decir que sí no se distingue de una rota
 
@@ -246,7 +269,37 @@ comprobación donde sólo había un número impreso. Dos ejemplos de lo que esco
   que se mide ahora son los **controles**, uno a uno. El campo de búsqueda mide 44 px
   exactos, o sea que el límite está vivo.
 
-### Deuda con nombre · las 66 fotografías
+### Deuda con nombre · los ADR 001–008 no existen como ficheros
+
+`docs/adr/` contiene tres ficheros: `009`, `010` y `011`. Los ocho anteriores **existen sólo
+como tabla en el documento de arquitectura** y se han venido dando por escritos. No es un
+efecto del `docs/` ignorado: un `.gitignore` no borra ficheros.
+
+Se escriben en el **Incremento 13**, el de documentación, con el formato
+Contexto / Decisión / Consecuencias que usan los tres que sí existen. No se generan antes: una
+decisión reconstruida a posteriori sin su contexto es peor que la tabla que ya hay.
+
+### Deuda con nombre · un incremento de arnés y sistema de diseño, antes del 12
+
+Dos cosas van juntas porque se arreglan en el mismo sitio y con la misma cabeza:
+
+**1. Las 66 fotografías.** Las capturas de `login`, `shell-pantry`, `dev-ui`, `zoom200`,
+`onboarding-*`, `home`, `account-menu` y `manage-*` siguen sin afirmar nada más allá del
+desbordamiento horizontal. **No se arreglan con fontanería**: cada pantalla necesita que
+alguien decida qué hay que garantizar de ella, y eso es diseño. El orden razonable empieza por
+donde ya ha aparecido un fallo de colocación —paneles, hojas, diálogos, menús—, que es lo que
+señala la sección 11 de `frontend-orden-de-ejecucion.md`. `manage-*` (20 capturas, con
+`ui-menu` por fila) y `account-menu` (4) son las primeras candidatas: llevan el mismo
+componente que ya falló en la lista de plantillas.
+
+**2. Unificar el botón de lista de `shared/ui`.** El mismo bloque de CSS está copiado en
+`add-item-panel` (`.sugerencia`), `restock-run-panel` (`.opcion`) y `template-editor-page`
+(`.sugerencia`). Los tres tenían el mismo píxel de menos y hubo que arreglarlo tres veces.
+Debe ser una clase sola.
+
+---
+
+### Deuda con nombre · las 66 fotografías (detalle)
 
 Las 66 capturas de `login`, `shell-pantry`, `dev-ui`, `zoom200`, `onboarding-*`, `home`,
 `account-menu` y `manage-*` siguen sin afirmar nada más allá del desbordamiento horizontal.
@@ -285,17 +338,62 @@ Registro de la última vez que se comprobó cada uno:
 | `shots.mjs` (menú anclado) | Quitar el `relative` de la fila de plantillas → 8 fallos nombrados en 1440 | Incremento 8 ✓ |
 | `shots.mjs` (hoja modal) | `showModal()` → `show()` en `ui-bottom-sheet` → la navegación queda `ALCANZABLE` | Incremento 8 ✓ |
 | `shots.mjs` (área táctil) | No hizo falta romperlo: al escribirlo encontró dos incumplimientos reales en la despensa | Incremento 8 ✓ |
+| `shots.mjs` (frescura) | Un error de tipos en `pantry-row.ts` → el servidor no converge y el arnés muere nombrando las dos huellas | Incremento 8 ✓ |
 
 **Lo que encontró la comprobación de área táctil el primer día**, y que hay que decidir aparte
 porque es producto, no arnés:
 
-| Control | Medida | Dónde |
+| Control | Medida | Estado |
 | --- | --- | --- |
-| El `<input>` de `ui-quantity-stepper` | 70×24 | `shared/ui/quantity-stepper.ts`. El grupo mide 48 px de alto y el campo 24, centrado: pulsar sobre el hueco de arriba o abajo no enfoca nada |
-| `.sugerencia` en el panel de agregar | 335×43 y 438×43 | `features/pantry/add-item-panel.ts:162`. Un píxel por debajo: `padding: 0.625rem` sin `min-height` |
+| `.sugerencia`, `.opcion` — **tres copias del mismo bloque** | 335×43 y 438×43 | **Arreglado** en el Incremento 8, en los tres sitios |
+| El `<input>` de `ui-quantity-stepper` | 70×24 | **Abierto**, con la medición hecha. Va en su propio cambio |
+
+El de 43 px no era un fallo: era **el mismo bloque de CSS copiado en tres componentes**
+—`add-item-panel`, `template-editor-page` y `restock-run-panel`—, con el mismo
+`padding: 0.625rem` que suma 43 y sin `min-height`. Arreglar el primero dejó los otros dos
+intactos, y sólo el segundo lo delató el arnés: las escenas del editor no miden áreas
+táctiles todavía, así que esa copia habría seguido rota sin que nada lo dijera.
+
+**Un mínimo escrito manda más que un relleno que casualmente suma**, y tres copias de un
+estilo son tres sitios donde arreglar el mismo píxel. Unificarlo en una clase compartida es
+deuda razonable para cuando se toque `shared/ui`.
 
 La regla de las áreas táctiles existe desde el Incremento 2 y nunca se había verificado. La
 primera vez que se verifica, no se cumple en dos sitios.
+
+**`shots.mjs` sale con código 1 mientras el segundo siga abierto.** Un arnés que señala un
+incumplimiento real y al que se silencia es peor que no tenerlo.
+
+#### Lo que costaría cada opción para el campo del stepper
+
+Medido en la despensa y en `/dev/ui`, a 375 px, a 1440 px y a 188 px —que es el viewport CSS
+al 200 % de zoom, el caso que el propio componente dice tener en cuenta—:
+
+| Opción | Campo a 375 | Campo a 188 (zoom 200 %) | Alto de grupo | Alto de fila a 375 |
+| --- | --- | --- | --- | --- |
+| Actual | 70×24 | 44×24 | 50 | 148,5 |
+| A · el campo estira en su columna | 70×**37** | 44×**37** | 50 | 148,5 |
+| B · `min-height: 44px` al campo | 70×44 | 44×44 | **57** | **155,5** |
+| C · número y unidad en la misma línea | 61×48 | **29**×48 | 50 | 148,5 |
+| **D · la unidad sale del flujo y el campo estira** | **70×48** | **44×48** | 50 | **148,5** |
+
+- **A no llega**: la unidad sigue ocupando altura en la columna, así que el campo se queda en
+  37 px. Sin coste y sin beneficio.
+- **B cumple pero la fila crece 7 px** a 375 (148,5 → 155,5, un 4,7 %). A 1440 no crece, porque
+  ahí hay holgura vertical de sobra. La despensa es lo más denso del producto y la fila es su
+  unidad de repetición.
+- **C parecía gratis y no lo es.** A 200 % de zoom el centro ya está estrechado a 44 px
+  —el componente cede el centro a propósito para que los botones no bajen de 44—, y meter la
+  unidad en esa misma línea deja el campo en **29 px de ancho**. Cambia un incumplimiento de
+  alto por uno de ancho, peor.
+- **D cumple sin mover nada.** La unidad pasa a `position: absolute` en el centro y el campo
+  estira a los 48 px del grupo, con `padding-bottom` para que el número siga donde estaba.
+  70×48 a 375 y 44×48 a 188; alto de grupo y de fila idénticos; sin desbordes; ningún valor
+  se corta. Visualmente la única diferencia son 2 px en la posición de la unidad.
+
+Respuesta a la pregunta: **sí, el campo puede ocupar los 48 px del grupo sin mover nada más**,
+pero no por el camino evidente. Hay que sacar la unidad del flujo, no estirar el campo dentro
+de él.
 | `verify-reachability.mjs` | Quitar el enlace de una fila de la lista → esa pantalla sale huérfana | Incremento 8 ✓ |
 | `verify-routing.mjs` | — | pendiente |
 | `verify-startup.mjs` | — | pendiente |

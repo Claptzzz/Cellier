@@ -3,11 +3,62 @@
  * Uso: node scripts/shots.mjs http://localhost:4200
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync } from 'node:fs';
 
 const BASE = process.argv[2] ?? 'http://localhost:4200';
 const OUT = new URL('../../docs/ui-shots/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
+
+// ---- Frescura: que lo servido sea lo que hay en disco ------------------------
+// `ng serve` en modo vigilancia se queda sirviendo la ultima compilacion buena cuando una
+// posterior falla. El error va a SU consola; la aplicacion responde con normalidad y esto
+// capturaba tan feliz una version que ya no era la del codigo. Paso tres veces, y una de
+// ellas costo una hora revisando capturas de un arreglo que si funcionaba.
+//
+// No basta con mirar: hay que obligar al servidor a demostrar que puede recompilar. Se
+// regenera el fichero de entorno —que lleva la huella del arbol de fuentes—, y se espera a
+// que la pagina anuncie esa misma huella en <html data-build>. Si el servidor no puede
+// llegar hasta ahi, lo que sirve no es lo que hay en disco, y ninguna captura vale.
+async function comprobarFrescura(browser) {
+  const raiz = new URL('..', import.meta.url).pathname;
+  execFileSync(process.execPath, [raiz + 'scripts/sync-environment.mjs'], { stdio: 'pipe' });
+  const enDisco = /buildStamp: "([^"]+)"/.exec(
+    readFileSync(raiz + 'src/environments/environment.development.ts', 'utf8'))?.[1];
+  if (!enDisco) {
+    throw new Error('sync-environment no dejo buildStamp en environment.development.ts');
+  }
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const limite = Date.now() + 40_000;
+  let servido = null;
+  let overlay = false;
+  while (Date.now() < limite) {
+    await page.goto(BASE + '/login', { waitUntil: 'commit' });
+    await page.waitForTimeout(1200);
+    ({ servido, overlay } = await page.evaluate(() => ({
+      servido: document.documentElement.dataset.build ?? null,
+      overlay: !!document.querySelector('vite-error-overlay'),
+    })));
+    if (servido === enDisco && !overlay) break;
+    await page.waitForTimeout(1500);
+  }
+  await context.close();
+
+  if (overlay) {
+    throw new Error(
+      'El servidor de desarrollo tiene un error de compilacion (<vite-error-overlay> en el ' +
+      'DOM): esta sirviendo la compilacion anterior. Mira su consola y arregla eso antes de capturar.');
+  }
+  if (servido !== enDisco) {
+    throw new Error(
+      `Lo servido no es lo que hay en disco: la pagina anuncia ${servido ?? 'nada'} y el ` +
+      `arbol de fuentes es ${enDisco}. El servidor no ha conseguido recompilar en 40s. ` +
+      'Reinicia `ng serve` y vuelve a lanzar esto: las capturas de un bundle viejo no valen nada.');
+  }
+  console.error(`Frescura OK: servido y disco coinciden en ${enDisco}.`);
+}
 
 const VIEWPORTS = { '375': { width: 375, height: 812 }, '1440': { width: 1440, height: 900 } };
 const THEMES = ['light', 'dark'];
@@ -39,6 +90,7 @@ const PROFILE = {
 };
 
 const browser = await chromium.launch();
+await comprobarFrescura(browser);
 const results = [];
 
 async function makePage(width, height, theme) {

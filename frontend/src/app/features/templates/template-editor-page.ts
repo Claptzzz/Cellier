@@ -225,6 +225,10 @@ const SEARCH_DEBOUNCE_MS = 250;
     .sugerencia {
       display: flex;
       width: 100%;
+      /* Mismo minimo que en el panel de agregar de la despensa: el relleno solo sumaba 43px.
+         Aqui no lo delato ninguna comprobacion porque las escenas del editor no miden areas
+         tactiles todavia; se arregla igual. */
+      min-height: var(--touch-min);
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;

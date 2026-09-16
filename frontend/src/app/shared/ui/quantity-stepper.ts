@@ -61,7 +61,9 @@ export interface QuantityChange {
            Encoger sí: a 200% de zoom el viewport se queda en 188px y el centro tiene que
            ceder para que los botones, que no pueden bajar de 44, sigan cabiendo. Por eso es
            un TOPE y no un ancho fijo: fijarlo desbordaba 2px a ese zoom. -->
-      <div class="flex min-w-0 max-w-[84px] flex-1 basis-[84px] flex-col items-center justify-center border-x border-border px-1.5">
+      <div
+        class="relative flex min-w-0 max-w-[84px] flex-1 basis-[84px] flex-col items-center
+               justify-center border-x border-border px-1.5">
         <input
           #campo
           [id]="id"
@@ -69,7 +71,8 @@ export interface QuantityChange {
           inputmode="decimal"
           [attr.aria-label]="label()"
           [disabled]="disabled()"
-          class="w-full bg-transparent text-center font-mono font-medium text-text
+          class="w-full flex-1 self-stretch bg-transparent pb-3 text-center font-mono
+                 font-medium text-text
                  text-[length:var(--text-control)]
                  focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent
                  disabled:opacity-45"
@@ -77,7 +80,21 @@ export interface QuantityChange {
           (focus)="onFocus()"
           (blur)="commit()"
           (keydown.enter)="commit()" />
-        <span class="text-[11px] leading-none text-text-muted">{{ unit() }}</span>
+        <!--
+          La unidad sale del flujo y el campo se queda solo en el: asi hereda los 48px del
+          grupo por el items-stretch que ya estaba puesto, y el area pulsable del numero pasa
+          de 70x24 a 70x48. Estirar el campo DENTRO de la columna no bastaba —la unidad le
+          seguia robando alto y se quedaba en 37—, y pasar los dos a una misma linea dejaba
+          el campo en 29px de ancho al 200% de zoom, que es peor.
+
+          pointer-events: none es imprescindible: un elemento colocado encima de un input
+          es donde se pierden los clics, y aqui la unidad cubre el tercio inferior del campo.
+          El pb-3 del input deja el numero donde estaba.
+        -->
+        <span
+          class="pointer-events-none absolute inset-x-0 bottom-0.5 text-center text-[11px]
+                 leading-none text-text-muted"
+          aria-hidden="true">{{ unit() }}</span>
       </div>
 
       <button

@@ -156,6 +156,10 @@ interface Sumado {
     .opcion {
       display: flex;
       width: 100%;
+      /* Tercera copia del mismo bloque —las otras dos son .sugerencia en add-item-panel y en
+         template-editor-page— y el mismo relleno de 0.625rem que sumaba 43px. Tres copias de
+         un estilo son tres sitios donde arreglar el mismo pixel. */
+      min-height: var(--touch-min);
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;

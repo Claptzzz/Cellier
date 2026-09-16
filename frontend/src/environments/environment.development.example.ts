@@ -8,4 +8,5 @@
 export const environment = {
   production: false,
   googleClientId: '123456789012-ejemplo.apps.googleusercontent.com',
+  buildStamp: 'ejemplo',
 } as const;

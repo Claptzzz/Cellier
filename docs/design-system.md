@@ -176,6 +176,33 @@ efecto parásito sólo se nota cuando el contenido cambia de forma. Es pariente 
 de [frontend-orden-de-ejecucion.md](frontend-orden-de-ejecucion.md) —algo heredado del entorno
 que el componente no eligió ni comprobó—.
 
+### Un elemento encima de un input es donde se pierden los clics
+
+El campo de `ui-quantity-stepper` medía 70×24 dentro de un grupo de 48 px de alto: la unidad
+compartía la columna y le robaba altura. Pulsar el hueco de arriba o de abajo no enfocaba
+nada. Se arregló sacando **la unidad** del flujo, no estirando el campo:
+
+```
+.centro   { position: relative }
+.unidad   { position: absolute; inset-inline: 0; bottom: 2px; pointer-events: none }
+input     { flex: 1 1 auto; align-self: stretch; padding-bottom: 12px }
+```
+
+Con el campo solo en el flujo, hereda los 48 px del grupo por el `items-stretch` que ya
+estaba. Estirarlo *dentro* de la columna se quedaba en 37, y pasar número y unidad a la misma
+línea dejaba el campo en 29 px de ancho al 200 % de zoom. Las cuatro opciones, medidas, están
+en `frontend-verificacion.md`.
+
+**`pointer-events: none` en lo que va encima no es opcional.** La unidad cubre el tercio
+inferior del campo; sin eso, un tercio de los clics no llegarían al input y el fallo sería
+intermitente según dónde pulse cada uno. Comprobado midiendo: clic en el centro, sobre la
+propia unidad y en las cuatro esquinas del campo, más `Tab` desde el botón de restar; los seis
+dejan el foco en el `<input>`, y teclear y pulsar Enter emite el `PATCH`.
+
+**La regla.** Si algo se coloca encima de un control, lleva `pointer-events: none` y
+`aria-hidden` cuando sea decorativo, y se comprueba pulsando en las esquinas, no en el centro.
+El centro casi siempre funciona.
+
 ## El copy no asume el género de lo que escribe el usuario
 
 Los nombres de hogar, de producto y de receta son **entrada libre**. No se puede deducir su

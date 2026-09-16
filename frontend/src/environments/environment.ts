@@ -11,4 +11,8 @@
 export const environment = {
   production: false,
   googleClientId: '',
+  // Huella del arbol de fuentes. La escribe sync-environment.mjs en los archivos
+  // generados; el arnes la compara con la del disco para detectar que el servidor de
+  // desarrollo esta sirviendo una compilacion vieja.
+  buildStamp: 'sin-sello',
 } as const;
