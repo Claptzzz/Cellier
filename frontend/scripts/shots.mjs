@@ -139,7 +139,15 @@ for (const theme of THEMES) {
 
     const name = `band-${mode}-${theme}.png`;
     await section.screenshot({ path: OUT + name });
-    results.push({ name });
+    // Estas dos familias empujaban solo { name }: quedaban FUERA de la puerta de salida,
+    // que filtra por overflowPx y problemas. Y son precisamente las capturas de
+    // accesibilidad de color, o sea las que menos se miran con atencion.
+    const overflow = await page.evaluate(() =>
+      document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const problemas = [];
+    const alto = await section.evaluate((el) => Math.round(el.getBoundingClientRect().height));
+    if (!alto) problemas.push('la seccion de la banda de nivel no se pinto');
+    results.push({ name, overflowPx: overflow, problemas });
     await context.close();
   }
 }
@@ -238,6 +246,10 @@ for (const abierto of [false, true]) {
 
       await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/pantry`, { waitUntil: 'commit' });
       await page.waitForTimeout(900);
+      // Estas dos comprobaciones LANZABAN, y una excepcion aqui aborta el script entero:
+      // un fallo en la captura 21 escondia las 171 siguientes. Ahora se acumulan como
+      // todas las demas, el recorrido termina y el informe sale completo.
+      const problemas = [];
       if (abierto) {
         // El chasis monta DOS selectores (barra lateral y cabecera) y oculta uno por CSS
         // segun el ancho. Se comprueba que solo uno sea visible: si los dos lo fueran,
@@ -246,20 +258,22 @@ for (const abierto of [false, true]) {
         const visibles = await disparadores.evaluateAll(
           (nodos) => nodos.filter((n) => n.checkVisibility()).length);
         if (visibles !== 1) {
-          throw new Error(`Se esperaba 1 selector visible en ${label}px, hay ${visibles}`);
+          problemas.push(`se esperaba 1 selector visible y hay ${visibles}`);
         }
 
-        await disparadores.filter({ visible: true }).click();
-        await page.waitForTimeout(600);
+        if (visibles > 0) {
+          await disparadores.filter({ visible: true }).first().click();
+          await page.waitForTimeout(600);
 
-        // Comprobacion explicita en vez de esperar por un selector: el chasis monta los
-        // dos contenedores y solo uno se muestra, asi que lo que importa es que haya
-        // exactamente UN panel visible, no que exista alguno.
-        const panelesVisibles = await page.evaluate(() =>
-          [...document.querySelectorAll('.ui-menu-panel, dialog.ui-sheet')]
-            .filter((n) => n.checkVisibility()).length);
-        if (panelesVisibles !== 1) {
-          throw new Error(`Se esperaba 1 panel visible en ${label}px, hay ${panelesVisibles}`);
+          // Comprobacion explicita en vez de esperar por un selector: el chasis monta los
+          // dos contenedores y solo uno se muestra, asi que lo que importa es que haya
+          // exactamente UN panel visible, no que exista alguno.
+          const panelesVisibles = await page.evaluate(() =>
+            [...document.querySelectorAll('.ui-menu-panel, dialog.ui-sheet')]
+              .filter((n) => n.checkVisibility()).length);
+          if (panelesVisibles !== 1) {
+            problemas.push(`se esperaba 1 panel visible y hay ${panelesVisibles}`);
+          }
         }
       }
 
@@ -267,7 +281,7 @@ for (const abierto of [false, true]) {
       await page.screenshot({ path: OUT + name });
       const overflow = await page.evaluate(() =>
         document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      results.push({ name, overflowPx: overflow });
+      results.push({ name, overflowPx: overflow, problemas });
       await context.close();
     }
   }
@@ -488,6 +502,8 @@ const ESCENAS_DESPENSA = [
   {
     slug: 'despensa-sin-resultados',
     items: DESPENSA,
+    // La busqueda no encaja con nada: la lista queda vacia a proposito.
+    filasEsperadas: 0,
     async interactuar(page) {
       // Al buscar, la respuesta pasa a vacia: es el estado "no encaja nada", que tiene
       // salida propia y no debe parecerse a la despensa vacia.
@@ -591,6 +607,8 @@ const ESCENAS_DESPENSA = [
   {
     slug: 'despensa-supermercado-resumen',
     items: DESPENSA,
+    // Registrar la compra de Huevos y Lechuga saca esas dos del grupo "se acabo".
+    filasEsperadas: 7,
     sinPaginaEntera: true,
     async interactuar(page) {
       await page.getByRole('button', { name: /Llegué del súper/ }).click();
@@ -647,21 +665,61 @@ for (const escena of ESCENAS_DESPENSA) {
         document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
       // La banda de nivel y las areas tactiles se miden, no se miran.
+      //
+      // `altoFila` NO es un area tactil: una fila mide 87 o 149 px, asi que compararla
+      // contra 44 habria pasado siempre. Lo que hay que medir son los controles, uno a uno.
+      // El campo de busqueda mide 44 px exactos, o sea que el limite esta vivo: cualquier
+      // recorte lo cruza.
       const geometria = await page.evaluate(() => {
+        const MIN = parseInt(getComputedStyle(document.documentElement)
+          .getPropertyValue('--touch-min'), 10);
+        const SELECTOR = 'button, input, select, textarea, [role="switch"], [role="checkbox"]';
+        const pequenos = [];
+        for (const el of document.querySelectorAll(SELECTOR)) {
+          if (!el.checkVisibility()) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          if (r.height >= MIN && r.width >= MIN) continue;
+          const nombre = el.getAttribute('aria-label') ?? el.textContent.trim().slice(0, 24)
+            ?? el.tagName;
+          pequenos.push(`${nombre || el.tagName}: ${Math.round(r.width)}x${Math.round(r.height)}`);
+        }
         const fila = document.querySelector('app-pantry-row article');
         const campo = document.querySelector('input[type="search"]');
         return {
+          touchMin: MIN,
+          pequenos,
           altoFila: fila ? Math.round(fila.getBoundingClientRect().height) : null,
           altoCampo: campo ? Math.round(campo.getBoundingClientRect().height) : null,
           filas: document.querySelectorAll('app-pantry-row').length,
         };
       });
-      results.push({ name, overflowPx: overflow, ...geometria });
+
+      const problemas = [];
+      if (!geometria.touchMin) problemas.push('no se pudo leer --touch-min');
+      geometria.pequenos.forEach((p) =>
+        problemas.push(`area tactil por debajo de ${geometria.touchMin}px -> ${p}`));
+      // Lo que el fixture dice que tiene que haber: si el listado se queda corto, la
+      // captura sale creible y el resto de la escena no comprueba nada.
+      //
+      // El numero esperado es de la ESCENA, no del fixture: una escena que busca o que
+      // registra una compra cambia la lista a proposito. Comparar contra el fixture a
+      // secas daba tres fallos falsos. Una escena que interactua y no declara cuantas
+      // filas espera no se comprueba, y eso se dice en el informe en vez de callarse.
+      const esperadas = escena.filasEsperadas ?? (escena.interactuar ? null : escena.items?.length);
+      if (esperadas != null && geometria.filas !== esperadas) {
+        problemas.push(`se esperaban ${esperadas} filas y hay ${geometria.filas}`);
+      } else if (esperadas == null && escena.items?.length) {
+        geometria.filasSinComprobar = geometria.filas;
+      }
+      results.push({ name, overflowPx: overflow, ...geometria, problemas });
       await context.close();
     }
   }
 }
 
+
+const DESPENSA_LARGO = DESPENSA.length;
 
 // ---- La despensa sin color --------------------------------------------------
 // El aviso de vencimiento no puede depender del tono: --warn y --danger tienen
@@ -686,7 +744,18 @@ for (const theme of THEMES) {
 
   const name = `despensa-gris-375-${theme}.png`;
   await page.screenshot({ path: OUT + name, fullPage: true });
-  results.push({ name, note: 'escala de grises' });
+  // Lo que esta escena existe para garantizar: que en gris sigan distinguiendose las
+  // filas y que el aviso de vencimiento siga teniendo icono, no solo color.
+  const overflow = await page.evaluate(() =>
+    document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  const gris = await page.evaluate(() => ({
+    filas: document.querySelectorAll('app-pantry-row').length,
+    iconos: document.querySelectorAll('app-pantry-row svg').length,
+  }));
+  const problemas = [];
+  if (gris.filas !== DESPENSA_LARGO) problemas.push(`se esperaban ${DESPENSA_LARGO} filas y hay ${gris.filas}`);
+  if (!gris.iconos) problemas.push('en gris no queda ningun icono: el estado dependeria del color');
+  results.push({ name, overflowPx: overflow, ...gris, problemas });
   await context.close();
 }
 
@@ -720,8 +789,13 @@ for (const [label, vp] of Object.entries(VIEWPORTS)) {
     await page.screenshot({ path: OUT + name });
     const overflow = await page.evaluate(() =>
       document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    const visibles = await page.locator('[role="status"], [role="alert"]').count();
-    results.push({ name, overflowPx: overflow, avisos: visibles });
+    // Antes contaba `[role="status"], [role="alert"]` en toda la pagina y daba 15: cada
+    // ui-skeleton lleva role="status" y cada ui-input un role="alert". Un numero que
+    // parecia una medicion. Los avisos se cuentan donde viven.
+    const visibles = await page.locator('.toast-host > .toast').count();
+    const problemas = [];
+    if (visibles !== 3) problemas.push(`se pulsaron 3 avisos y hay ${visibles} visibles`);
+    results.push({ name, overflowPx: overflow, avisos: visibles, problemas });
     await context.close();
   }
 }
