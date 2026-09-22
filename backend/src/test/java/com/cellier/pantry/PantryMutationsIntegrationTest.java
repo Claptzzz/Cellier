@@ -5,14 +5,13 @@ import com.cellier.household.domain.HouseholdMember;
 import com.cellier.catalog.ProductRepository;
 import com.cellier.household.HouseholdMemberRepository;
 import com.cellier.household.HouseholdRepository;
-import com.cellier.household.JoinRequestRepository;
 import com.cellier.identity.CellierUserPrincipal;
 import com.cellier.identity.GoogleIdentity;
 import com.cellier.identity.GoogleTokenVerifier;
-import com.cellier.identity.RefreshTokenRepository;
 import com.cellier.identity.UserRepository;
 import com.cellier.pantry.domain.MovementType;
 import com.cellier.pantry.domain.StockMovement;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -86,16 +85,10 @@ class PantryMutationsIntegrationTest {
     private UserRepository users;
 
     @Autowired
-    private RefreshTokenRepository refreshTokens;
-
-    @Autowired
     private HouseholdRepository households;
 
     @Autowired
     private HouseholdMemberRepository members;
-
-    @Autowired
-    private JoinRequestRepository joinRequests;
 
     @Autowired
     private ProductRepository products;
@@ -691,14 +684,7 @@ class PantryMutationsIntegrationTest {
     }
 
     private void limpiar() {
-        movements.deleteAll();
-        items.deleteAll();
-        products.deleteAll();
-        joinRequests.deleteAll();
-        members.deleteAll();
-        households.deleteAll();
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {

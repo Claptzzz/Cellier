@@ -4,8 +4,8 @@ import com.cellier.PostgresTestcontainerConfig;
 import com.cellier.household.domain.JoinRequestStatus;
 import com.cellier.identity.GoogleIdentity;
 import com.cellier.identity.GoogleTokenVerifier;
-import com.cellier.identity.RefreshTokenRepository;
 import com.cellier.identity.UserRepository;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -59,12 +59,6 @@ class JoinRequestIntegrationTest {
     private UserRepository users;
 
     @Autowired
-    private RefreshTokenRepository refreshTokens;
-
-    @Autowired
-    private HouseholdRepository households;
-
-    @Autowired
     private HouseholdMemberRepository members;
 
     @Autowired
@@ -88,11 +82,7 @@ class JoinRequestIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        joinRequests.deleteAll();
-        members.deleteAll();
-        households.deleteAll();
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
 
         stubGoogle("token-ana", "sub-ana", "ana.rivas@gmail.com", "Ana Rivas");
         stubGoogle("token-bruno", "sub-bruno", "bruno.soto@gmail.com", "Bruno Soto");

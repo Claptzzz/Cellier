@@ -1,13 +1,9 @@
 package com.cellier.catalog;
 
 import com.cellier.PostgresTestcontainerConfig;
-import com.cellier.household.HouseholdMemberRepository;
-import com.cellier.household.HouseholdRepository;
-import com.cellier.household.JoinRequestRepository;
 import com.cellier.identity.GoogleIdentity;
 import com.cellier.identity.GoogleTokenVerifier;
-import com.cellier.identity.RefreshTokenRepository;
-import com.cellier.identity.UserRepository;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,21 +51,6 @@ class ProductCatalogIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private UserRepository users;
-
-    @Autowired
-    private RefreshTokenRepository refreshTokens;
-
-    @Autowired
-    private HouseholdRepository households;
-
-    @Autowired
-    private HouseholdMemberRepository members;
-
-    @Autowired
-    private JoinRequestRepository joinRequests;
 
     @Autowired
     private ProductRepository products;
@@ -404,20 +385,7 @@ class ProductCatalogIntegrationTest {
     }
 
     private void limpiar() {
-        var em = entityManagerFactory.createEntityManager();
-        var tx = em.getTransaction();
-        tx.begin();
-        em.createNativeQuery("delete from stock_movements").executeUpdate();
-        em.createNativeQuery("delete from pantry_items").executeUpdate();
-        tx.commit();
-        em.close();
-
-        products.deleteAll();
-        joinRequests.deleteAll();
-        members.deleteAll();
-        households.deleteAll();
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {

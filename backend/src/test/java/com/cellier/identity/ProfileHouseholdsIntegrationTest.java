@@ -1,6 +1,7 @@
 package com.cellier.identity;
 
 import com.cellier.PostgresTestcontainerConfig;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -56,9 +57,6 @@ class ProfileHouseholdsIntegrationTest {
 
     @Autowired
     private UserRepository users;
-
-    @Autowired
-    private RefreshTokenRepository refreshTokens;
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;
@@ -305,19 +303,7 @@ class ProfileHouseholdsIntegrationTest {
     // ---------------------------------------------------------------------------------
 
     private void limpiar() {
-        // El orden importa: las solicitudes y las membresías cuelgan de los hogares, y los
-        // hogares de los usuarios. Se limpian con SQL para no arrastrar aquí los repositorios
-        // del módulo de hogares, que este test no necesita para nada más.
-        var em = entityManagerFactory.createEntityManager();
-        var tx = em.getTransaction();
-        tx.begin();
-        em.createNativeQuery("DELETE FROM join_requests").executeUpdate();
-        em.createNativeQuery("DELETE FROM household_members").executeUpdate();
-        em.createNativeQuery("DELETE FROM households").executeUpdate();
-        tx.commit();
-        em.close();
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {
