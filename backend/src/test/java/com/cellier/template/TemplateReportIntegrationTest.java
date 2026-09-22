@@ -1,16 +1,9 @@
 package com.cellier.template;
 
 import com.cellier.PostgresTestcontainerConfig;
-import com.cellier.catalog.ProductRepository;
-import com.cellier.household.HouseholdMemberRepository;
-import com.cellier.household.HouseholdRepository;
-import com.cellier.household.JoinRequestRepository;
 import com.cellier.identity.GoogleIdentity;
 import com.cellier.identity.GoogleTokenVerifier;
-import com.cellier.identity.RefreshTokenRepository;
-import com.cellier.identity.UserRepository;
-import com.cellier.pantry.PantryItemRepository;
-import com.cellier.pantry.StockMovementRepository;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -60,33 +53,6 @@ class TemplateReportIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private UserRepository users;
-
-    @Autowired
-    private RefreshTokenRepository refreshTokens;
-
-    @Autowired
-    private HouseholdRepository households;
-
-    @Autowired
-    private HouseholdMemberRepository members;
-
-    @Autowired
-    private JoinRequestRepository joinRequests;
-
-    @Autowired
-    private ProductRepository products;
-
-    @Autowired
-    private PantryItemRepository items;
-
-    @Autowired
-    private StockMovementRepository movements;
-
-    @Autowired
-    private PantryTemplateRepository templates;
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;
@@ -552,15 +518,7 @@ class TemplateReportIntegrationTest {
     }
 
     private void limpiar() {
-        templates.deleteAll();
-        movements.deleteAll();
-        items.deleteAll();
-        products.deleteAll();
-        joinRequests.deleteAll();
-        members.deleteAll();
-        households.deleteAll();
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {

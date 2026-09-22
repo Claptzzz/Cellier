@@ -3,8 +3,10 @@ package com.cellier.identity;
 import com.cellier.PostgresTestcontainerConfig;
 import com.cellier.identity.domain.ThemePreference;
 import com.cellier.shared.error.UnauthorizedException;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,13 +56,15 @@ class AuthFlowIntegrationTest {
     @Autowired
     private RefreshTokenRepository refreshTokens;
 
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
+
     @MockitoBean
     private GoogleTokenVerifier googleTokenVerifier;
 
     @BeforeEach
     void setUp() {
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
         when(googleTokenVerifier.verify(eq(ID_TOKEN)))
                 .thenReturn(new GoogleIdentity(GOOGLE_SUB, EMAIL, "Ana Rivas",
                         "https://lh3.googleusercontent.com/a/ACg8ocK"));

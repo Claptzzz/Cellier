@@ -4,12 +4,11 @@ import com.cellier.PostgresTestcontainerConfig;
 import com.cellier.catalog.ProductRepository;
 import com.cellier.household.HouseholdMemberRepository;
 import com.cellier.household.HouseholdRepository;
-import com.cellier.household.JoinRequestRepository;
 import com.cellier.household.domain.HouseholdMember;
 import com.cellier.identity.GoogleIdentity;
 import com.cellier.identity.GoogleTokenVerifier;
-import com.cellier.identity.RefreshTokenRepository;
 import com.cellier.identity.UserRepository;
+import com.cellier.support.IntegrationTestDatabaseCleaner;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -65,28 +64,16 @@ class TemplateIntegrationTest {
     private UserRepository users;
 
     @Autowired
-    private RefreshTokenRepository refreshTokens;
-
-    @Autowired
     private HouseholdRepository households;
 
     @Autowired
     private HouseholdMemberRepository members;
 
     @Autowired
-    private JoinRequestRepository joinRequests;
-
-    @Autowired
     private ProductRepository products;
 
     @Autowired
     private PantryTemplateRepository templates;
-
-    @Autowired
-    private com.cellier.pantry.PantryItemRepository items;
-
-    @Autowired
-    private com.cellier.pantry.StockMovementRepository movements;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -546,18 +533,7 @@ class TemplateIntegrationTest {
     }
 
     private void limpiar() {
-        templates.deleteAll();
-        // La despensa referencia el catálogo con ON DELETE RESTRICT, así que borrar productos
-        // sin vaciarla antes falla. Aquí no hay despensa, pero otros tests del mismo módulo
-        // la dejan puesta: la limpieza tiene que valer también cuando no se corre sola.
-        movements.deleteAll();
-        items.deleteAll();
-        products.deleteAll();
-        joinRequests.deleteAll();
-        members.deleteAll();
-        households.deleteAll();
-        refreshTokens.deleteAll();
-        users.deleteAll();
+        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {
