@@ -5,9 +5,14 @@
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const BASE = process.argv[2] ?? 'http://localhost:4200';
-const OUT = new URL('../../docs/ui-shots/', import.meta.url).pathname;
+// fileURLToPath, no `.pathname` a secas: en Windows el pathname crudo de un file:// lleva
+// una barra inicial delante de la letra de unidad ("/C:/Users/..."), y pasarlo tal cual a
+// fs duplicaba la unidad ("C:\C:\Users\..."). fileURLToPath es la conversión correcta en
+// las tres plataformas; sync-environment.mjs ya lo usa así.
+const OUT = fileURLToPath(new URL('../../docs/ui-shots/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
 
 // ---- Frescura: que lo servido sea lo que hay en disco ------------------------
@@ -21,7 +26,7 @@ mkdirSync(OUT, { recursive: true });
 // que la pagina anuncie esa misma huella en <html data-build>. Si el servidor no puede
 // llegar hasta ahi, lo que sirve no es lo que hay en disco, y ninguna captura vale.
 async function comprobarFrescura(browser) {
-  const raiz = new URL('..', import.meta.url).pathname;
+  const raiz = fileURLToPath(new URL('..', import.meta.url));
   execFileSync(process.execPath, [raiz + 'scripts/sync-environment.mjs'], { stdio: 'pipe' });
   const enDisco = /buildStamp: "([^"]+)"/.exec(
     readFileSync(raiz + 'src/environments/environment.development.ts', 'utf8'))?.[1];
@@ -1231,6 +1236,250 @@ for (const escena of ESCENAS_REPORTE) {
       }
 
       results.push({ name, overflowPx: overflow, problemas });
+      await context.close();
+    }
+  }
+}
+
+// ---- Recetas: listado --------------------------------------------------------
+const RECETAS = [
+  { id: 'r1', name: 'Tarta de manzana', ingredientCount: 6, missingCount: 1, availability: 'MISSING',
+    createdByName: 'Ana Rivas', createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z' },
+  { id: 'r2', name: 'Tortilla de patatas', ingredientCount: 4, missingCount: 0, availability: 'READY',
+    createdByName: 'Bruno Soto', createdAt: '2026-08-30T19:45:00Z', updatedAt: '2026-08-30T19:45:00Z' },
+  { id: 'r3', name: 'Bizcocho de canela', ingredientCount: 5, missingCount: 2, availability: 'MISSING',
+    createdAt: '2026-07-11T10:00:00Z', updatedAt: '2026-07-11T10:00:00Z' },
+];
+
+const ESCENAS_RECETAS = [
+  { slug: 'recetas-lista', datos: RECETAS },
+  { slug: 'recetas-vacia', datos: [] },
+  { slug: 'recetas-cargando', colgar: true, esperaMs: 700 },
+  {
+    slug: 'recetas-filtro-puedo-cocinarla',
+    datos: RECETAS,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('radio', { name: 'Puedo cocinarla' }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    slug: 'recetas-filtro-me-faltan',
+    datos: RECETAS,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('radio', { name: 'Me faltan' }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    slug: 'recetas-buscando',
+    datos: RECETAS,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByLabel('Buscar recetas').fill('tarta');
+      await page.waitForTimeout(500);
+    },
+  },
+];
+
+for (const escena of ESCENAS_RECETAS) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') erroresConsola.push('error en consola: ' + m.text().split('\n')[0].slice(0, 180));
+      });
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      // Un solo * tras 'recipes': no cruza '/', así que no casa con /recipes/{id}. Con
+      // query params (?availability=&search=) sigue casando, porque el '?' no es '/'.
+      const RUTA_LISTA = '**/api/v1/households/*/recipes*';
+      if (escena.colgar) {
+        await page.route(RUTA_LISTA, () => {});
+      } else {
+        await page.route(RUTA_LISTA, json(escena.datos));
+      }
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/recipes`, { waitUntil: 'commit' });
+      await page.waitForTimeout(escena.esperaMs ?? 1100);
+      const problemas = escena.interactuar ? ((await escena.interactuar(page, label)) ?? []) : [];
+      problemas.push(...erroresConsola);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow, ...(problemas.length ? { problemas } : {}) });
+      await context.close();
+    }
+  }
+}
+
+// ---- Recetas: detalle y modo cocina ------------------------------------------
+const DETALLE_RECETA = {
+  id: 'r1', name: 'Tarta de manzana', description: 'Clásica, con canela y un toque de limón.',
+  servings: 6, prepMinutes: 45, createdByName: 'Ana Rivas',
+  createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z',
+  ingredients: [
+    { id: 'ri1', productId: 'p1', productName: 'Manzana', unit: 'UNIT', category: 'Frescos', quantity: 6, optional: false },
+    { id: 'ri2', productId: 'p2', productName: 'Canela', unit: 'G', category: 'Despensa', quantity: 5, optional: true },
+  ],
+  steps: [
+    { position: 1, instruction: 'Pelar y laminar las manzanas.' },
+    { position: 2, instruction: 'Colocarlas sobre la masa y hornear 40 minutos a 180°C.' },
+    { position: 3, instruction: 'Dejar enfriar 10 minutos antes de desmoldar.' },
+  ],
+};
+const DISPONIBILIDAD_RECETA = {
+  recipeId: 'r1', recipeName: 'Tarta de manzana', generatedAt: '2026-08-24T15:00:00Z',
+  availability: 'MISSING', missingCount: 1,
+  items: [
+    { productId: 'p1', productName: 'Manzana', unit: 'UNIT', category: 'Frescos',
+      quantity: 6, availableQuantity: 2, missingQuantity: 4, optional: false, sufficient: false },
+    { productId: 'p2', productName: 'Canela', unit: 'G', category: 'Despensa',
+      quantity: 5, availableQuantity: 0, missingQuantity: 5, optional: true, sufficient: false },
+  ],
+};
+const PANTRY_PARA_RECETA = [
+  { id: 'pi1', product: { id: 'p1', name: 'Manzana', unit: 'UNIT', category: 'Frescos' },
+    quantity: 2, parLevel: null, version: 0 },
+];
+
+const ESCENAS_DETALLE_RECETA = [
+  { slug: 'receta-detalle', datos: DETALLE_RECETA },
+  {
+    slug: 'receta-modo-cocina',
+    datos: DETALLE_RECETA,
+    sinPaginaEntera: true,
+    conWakeLock: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Modo cocina' }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+];
+
+for (const escena of ESCENAS_DETALLE_RECETA) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') erroresConsola.push('error en consola: ' + m.text().split('\n')[0].slice(0, 180));
+      });
+      if (escena.conWakeLock) {
+        // Chromium de escritorio bajo Playwright no expone Wake Lock por defecto: sin este
+        // relleno, el modo cocina nunca ejercitaría esa rama ni en una captura.
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'wakeLock', {
+            value: { request: async () => ({ release: async () => {}, addEventListener: () => {} }) },
+            configurable: true,
+          });
+        });
+      }
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      await page.route('**/api/v1/households/*/recipes/*/availability', json(DISPONIBILIDAD_RECETA));
+      await page.route('**/api/v1/households/*/recipes/*', json(escena.datos));
+      await page.route('**/api/v1/households/*/pantry/items**', json(PANTRY_PARA_RECETA));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/h/${HOUSEHOLD_ID}/recipes/r1`, { waitUntil: 'commit' });
+      await page.waitForTimeout(1100);
+      const problemas = escena.interactuar ? ((await escena.interactuar(page, label)) ?? []) : [];
+      problemas.push(...erroresConsola);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow, ...(problemas.length ? { problemas } : {}) });
+      await context.close();
+    }
+  }
+}
+
+// ---- Editor de receta ---------------------------------------------------------
+const ESCENAS_EDITOR_RECETA = [
+  { slug: 'editor-receta-nueva', path: `/h/${HOUSEHOLD_ID}/recipes/new`, detalle: null },
+  { slug: 'editor-receta-editando', path: `/h/${HOUSEHOLD_ID}/recipes/r1/edit`, detalle: DETALLE_RECETA },
+  {
+    slug: 'editor-receta-sugerencias',
+    path: `/h/${HOUSEHOLD_ID}/recipes/r1/edit`,
+    detalle: DETALLE_RECETA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.route('**/api/v1/households/*/products**', json([
+        { id: 'p9', name: 'Harina', unit: 'KG', category: 'Despensa' },
+        { id: 'p8', name: 'Huevos', unit: 'UNIT', category: 'Frescos' },
+      ]));
+      await page.getByRole('button', { name: 'Añadir' }).first().click();
+      await page.waitForTimeout(300);
+      await page.getByLabel('Ingrediente').fill('h');
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    slug: 'editor-receta-confirmar-salida',
+    path: `/h/${HOUSEHOLD_ID}/recipes/r1/edit`,
+    detalle: DETALLE_RECETA,
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByLabel('Nombre').fill('Tarta francesa');
+      await page.waitForTimeout(250);
+      await page.getByRole('button', { name: 'Cancelar' }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+];
+
+for (const escena of ESCENAS_EDITOR_RECETA) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') erroresConsola.push('error en consola: ' + m.text().split('\n')[0].slice(0, 180));
+      });
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      if (escena.detalle) {
+        await page.route('**/api/v1/households/*/recipes/*', json(escena.detalle));
+      }
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}${escena.path}`, { waitUntil: 'commit' });
+      await page.waitForTimeout(1100);
+      const problemas = escena.interactuar ? ((await escena.interactuar(page, label)) ?? []) : [];
+      problemas.push(...erroresConsola);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow, ...(problemas.length ? { problemas } : {}) });
       await context.close();
     }
   }

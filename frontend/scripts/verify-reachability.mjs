@@ -32,6 +32,9 @@ const PANTALLAS = [
   { nombre: 'editor de plantilla', patron: /^\/h\/[^/]+\/templates\/[^/]+$/ },
   { nombre: 'reporte de compras',  patron: /^\/h\/[^/]+\/templates\/[^/]+\/report$/ },
   { nombre: 'recetas',             patron: /^\/h\/[^/]+\/recipes$/ },
+  { nombre: 'nueva receta',        patron: /^\/h\/[^/]+\/recipes\/new$/ },
+  { nombre: 'detalle de receta',   patron: /^\/h\/[^/]+\/recipes\/(?!new$)[^/]+$/ },
+  { nombre: 'editor de receta',    patron: /^\/h\/[^/]+\/recipes\/[^/]+\/edit$/ },
   { nombre: 'hogar',               patron: /^\/h\/[^/]+\/home$/ },
   { nombre: 'administrar hogar',   patron: /^\/h\/[^/]+\/manage$/ },
   { nombre: 'ajustes',             patron: /^\/settings$/ },
@@ -76,6 +79,26 @@ const MIAS = [
     requestedAt: '2026-09-06T09:15:02Z', resolvedAt: null },
 ];
 
+/** Una receta para que la lista tenga tarjeta que pulsar y el detalle deje de ser inalcanzable. */
+const RECETAS = [
+  { id: 'rcp1', name: 'Tarta de manzana', ingredientCount: 2, missingCount: 1, availability: 'MISSING',
+    createdByName: 'Ana Rivas', createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z' },
+];
+const RECETA = {
+  id: 'rcp1', name: 'Tarta de manzana', description: 'Clásica.', servings: 6, prepMinutes: 45,
+  createdByName: 'Ana Rivas', createdAt: '2026-08-24T15:00:00Z', updatedAt: '2026-09-02T11:20:00Z',
+  ingredients: [
+    { id: 'ri1', productId: 'p1', productName: 'Huevos', unit: 'UNIT', category: 'Frescos', quantity: 6, optional: false },
+  ],
+  steps: [{ position: 1, instruction: 'Batir los huevos.' }],
+};
+const DISPONIBILIDAD_RECETA = {
+  recipeId: 'rcp1', recipeName: 'Tarta de manzana', generatedAt: '2026-09-15T14:30:00Z',
+  availability: 'MISSING', missingCount: 1,
+  items: [{ productId: 'p1', productName: 'Huevos', unit: 'UNIT', category: 'Frescos',
+    quantity: 6, availableQuantity: 0, missingQuantity: 6, optional: false, sufficient: false }],
+};
+
 const json = (body) => (r) =>
   r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -97,6 +120,11 @@ async function nuevoContexto(width) {
     items: [{ productId: 'p1', productName: 'Huevos', unit: 'UNIT', category: 'Frescos',
       desiredQuantity: 10, availableQuantity: 4, missingQuantity: 6, status: 'MISSING' }],
   }));
+  await page.route('**/api/v1/households/*/recipes', json(RECETAS));
+  await page.route('**/api/v1/households/*/recipes/*/availability', json(DISPONIBILIDAD_RECETA));
+  await page.route('**/api/v1/households/*/recipes/*', json(RECETA));
+  await page.route('**/api/v1/households/*/products**', json([]));
+  await page.route('**/api/v1/households/*/pantry/items**', json([]));
   await page.route(`**/api/v1/households/${HID}`, json({
     id: HID, name: 'Casa Rivas', joinCode: 'K7M2QP9X', role: 'ADMIN',
     memberCount: 3, createdAt: '2026-09-01T10:00:00Z',

@@ -95,6 +95,28 @@ const householdSections: Routes = [
     loadComponent: () => import('./features/recipes/recipes-page').then((m) => m.RecipesPage),
   },
   {
+    // Literal ANTES que ':recipeId': si fuera al revés, ':recipeId' capturaría "new" como
+    // si fuera un identificador y esta ruta nunca se alcanzaría.
+    path: 'recipes/new',
+    title: 'Nueva receta · Cellier',
+    canDeactivate: [unsavedChangesGuard],
+    loadComponent: () =>
+      import('./features/recipes/recipe-editor-page').then((m) => m.RecipeEditorPage),
+  },
+  {
+    path: 'recipes/:recipeId',
+    title: 'Receta · Cellier',
+    loadComponent: () =>
+      import('./features/recipes/recipe-detail-page').then((m) => m.RecipeDetailPage),
+  },
+  {
+    path: 'recipes/:recipeId/edit',
+    title: 'Editar receta · Cellier',
+    canDeactivate: [unsavedChangesGuard],
+    loadComponent: () =>
+      import('./features/recipes/recipe-editor-page').then((m) => m.RecipeEditorPage),
+  },
+  {
     path: 'home',
     title: 'Hogar · Cellier',
     loadComponent: () => import('./features/home/home-page').then((m) => m.HomePage),
