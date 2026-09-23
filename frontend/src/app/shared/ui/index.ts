@@ -11,6 +11,7 @@ export { Menu } from './menu';
 export { LevelBand } from './level-band';
 export { QuantityStepper } from './quantity-stepper';
 export { Select } from './select';
+export { SegmentedControl } from './segmented-control';
 export { Skeleton } from './skeleton';
 export { ToastHost } from './toast-host';
 
@@ -19,4 +20,5 @@ export type { ButtonSize, ButtonVariant } from './button';
 export type { IconName } from './icon.data';
 export type { LevelState } from './level-band';
 export type { QuantityChange } from './quantity-stepper';
+export type { SegmentOption } from './segmented-control';
 export type { SelectOption } from './select';
