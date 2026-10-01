@@ -61,3 +61,5 @@ docs/ui-shots/
 
 # Skills de Claude de terceros, traidas de fuera. No son trabajo del proyecto.
 .claude/skills/
+
+.env

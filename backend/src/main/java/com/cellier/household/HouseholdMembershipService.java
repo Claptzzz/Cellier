@@ -3,13 +3,17 @@ package com.cellier.household;
 import com.cellier.household.domain.HouseholdMember;
 import com.cellier.household.domain.HouseholdRole;
 import com.cellier.household.dto.HouseholdMemberResponse;
+import com.cellier.household.dto.HouseholdSummaryResponse;
 import com.cellier.household.dto.UpdateMemberRoleRequest;
 import com.cellier.identity.CurrentUserService;
+import com.cellier.identity.UserHouseholdOffboarding;
 import com.cellier.shared.error.ConflictException;
 import com.cellier.shared.error.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,9 +24,13 @@ import java.util.UUID;
  * ninguna fila concreta sino en el conjunto: <strong>el hogar conserva siempre al menos un
  * administrador</strong> (R4). Por eso todas empiezan bloqueando la fila del hogar, y solo
  * después leen el recuento de administradores sobre el que deciden.
+ *
+ * <p>Implementa además {@link UserHouseholdOffboarding}, el puerto por el que la baja de
+ * cuenta sale de los hogares del usuario sin que {@code identity} tenga que conocer este
+ * módulo.
  */
 @Service
-public class HouseholdMembershipService {
+public class HouseholdMembershipService implements UserHouseholdOffboarding {
 
     private static final String LAST_ADMIN_ON_DEMOTE =
             "El hogar debe conservar al menos un administrador. Promueve a otro miembro antes de quitarle el rol a este.";
@@ -109,6 +117,43 @@ public class HouseholdMembershipService {
         }
 
         members.delete(target);
+    }
+
+    /**
+     * Sale de todos los hogares del usuario, para la baja de cuenta (R4 sigue rigiendo).
+     *
+     * <p>Primero bloquea y comprueba <em>todos</em> los hogares donde el usuario administra,
+     * y solo si ninguno queda sin administrador procede a borrar las membresías. Bloquear en
+     * orden estable (por identificador) evita que dos bajas concurrentes con hogares en común
+     * se abracen esperándose la una a la otra.
+     */
+    @Override
+    @Transactional
+    public void leaveAllHouseholds(UUID userId) {
+        List<HouseholdSummaryResponse> summaries = members.findSummariesByUserId(userId);
+        if (summaries.isEmpty()) {
+            return;
+        }
+
+        List<HouseholdSummaryResponse> administrados = summaries.stream()
+                .filter(h -> h.role() == HouseholdRole.ADMIN)
+                .sorted(Comparator.comparing(HouseholdSummaryResponse::id))
+                .toList();
+
+        List<HouseholdSummaryResponse> bloqueantes = new ArrayList<>();
+        for (HouseholdSummaryResponse hogar : administrados) {
+            lockHousehold(hogar.id());
+            if (isLastAdmin(hogar.id())) {
+                bloqueantes.add(hogar);
+            }
+        }
+        if (!bloqueantes.isEmpty()) {
+            throw new LastAdminOnAccountDeletionException(bloqueantes);
+        }
+
+        for (HouseholdSummaryResponse hogar : summaries) {
+            members.findByHouseholdIdAndUserId(hogar.id(), userId).ifPresent(members::delete);
+        }
     }
 
     /**

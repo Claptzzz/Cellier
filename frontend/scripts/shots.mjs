@@ -1485,6 +1485,95 @@ for (const escena of ESCENAS_EDITOR_RECETA) {
   }
 }
 
+// ---- Ajustes: perfil, apariencia, mis hogares y baja de cuenta --------------
+const ESCENAS_AJUSTES = [
+  { slug: 'ajustes' },
+  {
+    slug: 'ajustes-eliminar-cuenta',
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Eliminar cuenta' }).click();
+      await page.waitForTimeout(300);
+      await page.getByLabel('Escribe ELIMINAR para confirmar').fill('ELIMINAR');
+      await page.waitForTimeout(200);
+    },
+  },
+  {
+    // El 409 de "ultimo administrador": la propia respuesta de la API decide cuando se
+    // ve esta pantalla, asi que se simula en vez de fabricarla a mano.
+    slug: 'ajustes-eliminar-bloqueada',
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.route('**/api/v1/me', (r) => {
+        if (r.request().method() === 'DELETE') {
+          return r.fulfill({
+            status: 409, contentType: 'application/json',
+            body: JSON.stringify({ blockingHouseholds: [{ id: HOUSEHOLD_ID, name: 'Casa Rivas' }] }),
+          });
+        }
+        return json(PROFILE)(r);
+      });
+      await page.getByRole('button', { name: 'Eliminar cuenta' }).click();
+      await page.waitForTimeout(300);
+      await page.getByLabel('Escribe ELIMINAR para confirmar').fill('ELIMINAR');
+      await page.waitForTimeout(200);
+      await page.getByRole('button', { name: 'Sí, eliminar mi cuenta' }).click();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // El primer hogar del perfil es donde administra (R1): es el caso que ensena el
+    // aviso de "unico administrador" antes de que se intente salir, no despues.
+    slug: 'ajustes-salir-hogar',
+    sinPaginaEntera: true,
+    async interactuar(page) {
+      await page.getByRole('button', { name: 'Salir del hogar' }).first().click();
+      await page.waitForTimeout(300);
+    },
+  },
+];
+
+for (const escena of ESCENAS_AJUSTES) {
+  for (const [label, vp] of Object.entries(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 2, colorScheme: theme,
+      });
+      const page = await context.newPage();
+      const erroresConsola = [];
+      page.on('console', (m) => {
+        if (m.type() !== 'error') return;
+        const texto = m.text();
+        // Chrome vuelca aqui TODO recurso que responda fuera de 2xx, aunque la aplicacion
+        // lo capture y lo muestre bien: "ajustes-eliminar-bloqueada" provoca un 409 A
+        // PROPOSITO para fotografiar ese estado, y ese aviso de red no es un error de script
+        // sin capturar. Silenciar solo esta familia de mensaje deja intacta la deteccion de
+        // errores de verdad (TypeError, errores de Angular, etc.).
+        if (/failed to load resource: the server responded with a status of/i.test(texto)) return;
+        erroresConsola.push('error en consola: ' + texto.split('\n')[0].slice(0, 180));
+      });
+      await page.route('**/api/**', json([]));
+      await page.route('**/api/v1/me', json(PROFILE));
+      await page.addInitScript((t) => {
+        localStorage.setItem('cellier.theme', t);
+        localStorage.setItem('cellier.refreshToken', 'shot-token');
+      }, theme);
+
+      await page.goto(`${BASE}/settings`, { waitUntil: 'commit' });
+      await page.waitForTimeout(900);
+      const problemas = escena.interactuar ? ((await escena.interactuar(page, label)) ?? []) : [];
+      problemas.push(...erroresConsola);
+
+      const name = `${escena.slug}-${label}-${theme}.png`;
+      await page.screenshot({ path: OUT + name, fullPage: label === '375' && !escena.sinPaginaEntera });
+      const overflow = await page.evaluate(() =>
+        document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      results.push({ name, overflowPx: overflow, ...(problemas.length ? { problemas } : {}) });
+      await context.close();
+    }
+  }
+}
+
 // ---- Holgura del boton flotante sobre la ultima fila -------------------------
 // Esta comprobacion estuvo MIDIENDO NADA desde que se escribio: apuntaba a /dev/ui, donde
 // el boton flotante no existe —solo lo pinta la despensa—, y ademas buscaba una etiqueta

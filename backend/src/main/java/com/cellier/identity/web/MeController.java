@@ -13,8 +13,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -84,6 +87,18 @@ public class MeController {
               "errors": { "locale": "El locale debe tener el formato BCP 47, por ejemplo es-CL" }
             }""";
 
+    private static final String EXAMPLE_LAST_ADMIN = """
+            {
+              "type": "https://cellier.app/problems/conflict",
+              "title": "Conflicto con el estado actual",
+              "status": 409,
+              "detail": "Eres el único administrador de un hogar. Traspasa la administración a otro miembro o elimina el hogar antes de eliminar tu cuenta.",
+              "instance": "/api/v1/me",
+              "blockingHouseholds": [
+                { "id": "8c2b7e14-9a3d-4f60-b1c5-0d7e2a6f4b98", "name": "Casa Rivas" }
+              ]
+            }""";
+
     private final AuthService authService;
 
     public MeController(AuthService authService) {
@@ -139,5 +154,59 @@ public class MeController {
     @PatchMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public UserProfileResponse updateMe(@Valid @RequestBody UpdateProfileRequest request) {
         return authService.updateCurrentProfile(request);
+    }
+
+    @Operation(
+            summary = "Exportar mis datos",
+            description = """
+                    Descarga los datos personales del usuario en JSON: perfil y hogares a los
+                    que pertenece. Es la misma forma que devuelve `GET /api/v1/me`, servida con
+                    `Content-Disposition` para que el navegador la ofrezca como descarga.
+                    """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Datos personales del usuario.",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = UserProfileResponse.class),
+                            examples = @ExampleObject(name = "exportacion", value = EXAMPLE_PROFILE))),
+            @ApiResponse(responseCode = "401", description = "Falta el access token, o no es válido.",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "sinToken", value = EXAMPLE_UNAUTHORIZED)))
+    })
+    @GetMapping(path = "/export", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<UserProfileResponse> exportMe() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"cellier-datos.json\"")
+                .body(authService.currentProfile());
+    }
+
+    @Operation(
+            summary = "Eliminar la cuenta propia",
+            description = """
+                    Baja definitiva: anonimiza el correo y el nombre, revoca todas las sesiones
+                    y sale de todos los hogares a los que pertenece.
+
+                    El historial de movimientos que dejó el usuario se conserva, con el autor
+                    ya anonimizado; no hace falta borrar nada más para eso.
+
+                    Si el usuario es el único administrador de algún hogar, la baja se rechaza
+                    con 409 y la lista de esos hogares: hay que traspasar la administración a
+                    otro miembro o eliminar el hogar antes de poder darse de baja.
+                    """)
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Cuenta eliminada.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Falta el access token, o no es válido.",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "sinToken", value = EXAMPLE_UNAUTHORIZED))),
+            @ApiResponse(responseCode = "409", description = "El usuario es el único administrador de al menos un hogar.",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "ultimoAdmin", value = EXAMPLE_LAST_ADMIN)))
+    })
+    @DeleteMapping
+    public ResponseEntity<Void> deleteMe() {
+        authService.deleteCurrentAccount();
+        return ResponseEntity.noContent().build();
     }
 }

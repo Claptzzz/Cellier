@@ -1,7 +1,9 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, of, tap, timeout } from 'rxjs';
 
+import { ThemeService } from '../theme/theme.service';
+import { SKIP_ERROR_TOAST } from './error.interceptor';
 import type { AuthResponse, UserProfile } from './auth.models';
 
 /**
@@ -27,6 +29,14 @@ export const PROFILE_LOAD_TIMEOUT_MS = 10_000;
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly theme = inject(ThemeService);
+
+  /**
+   * Para las peticiones cuyo error gestiona quien las lanza: la baja de cuenta puede
+   * responder 409 con la lista de hogares bloqueantes, y esa lista se enseña en el
+   * propio diálogo, no en un aviso flotante genérico.
+   */
+  private readonly handledByCaller = new HttpContext().set(SKIP_ERROR_TOAST, true);
 
   private readonly accessTokenSignal = signal<string | null>(null);
   private readonly refreshTokenSignal = signal<string | null>(this.readStoredRefreshToken());
@@ -127,7 +137,34 @@ export class AuthService {
   loadProfile(): Observable<UserProfile> {
     return this.http
       .get<UserProfile>('/api/v1/me')
-      .pipe(tap((user) => this.userSignal.set(user)));
+      .pipe(tap((user) => this.applyProfile(user)));
+  }
+
+  /** Actualización parcial del perfil propio. Los campos que no se envíen no cambian. */
+  updateProfile(patch: {
+    readonly displayName?: string;
+    readonly themePreference?: UserProfile['themePreference'];
+    readonly locale?: string;
+  }): Observable<UserProfile> {
+    return this.http
+      .patch<UserProfile>('/api/v1/me', patch)
+      .pipe(tap((user) => this.applyProfile(user)));
+  }
+
+  /** Los datos personales del usuario, para ofrecerlos como descarga. */
+  exportData(): Observable<UserProfile> {
+    return this.http.get<UserProfile>('/api/v1/me/export');
+  }
+
+  /**
+   * Baja de cuenta. Puede responder 409 con `blockingHouseholds` si el usuario es el
+   * único administrador de algún hogar; ese cuerpo lo interpreta quien llama, por eso
+   * la petición va marcada como gestionada por el llamador.
+   */
+  deleteAccount(): Observable<void> {
+    return this.http
+      .delete<void>('/api/v1/me', { context: this.handledByCaller })
+      .pipe(tap(() => this.clearSession()));
   }
 
   /** Revoca en el servidor y limpia el cliente pase lo que pase. */
@@ -148,8 +185,19 @@ export class AuthService {
    */
   private applySession(response: AuthResponse): void {
     this.accessTokenSignal.set(response.accessToken);
-    this.userSignal.set(response.user);
+    this.applyProfile(response.user);
     this.setRefreshToken(response.refreshToken);
+  }
+
+  /**
+   * Guarda el perfil y, con él, siembra el tema de este dispositivo si todavía no
+   * eligió ninguno. Pasa en el login, en el refresh y en cada relectura de `/me`:
+   * exactamente los sitios donde el perfil puede traer una preferencia que este
+   * dispositivo aún no conoce.
+   */
+  private applyProfile(user: UserProfile): void {
+    this.userSignal.set(user);
+    this.theme.seedFromAccount(user.themePreference);
   }
 
   clearSession(): void {

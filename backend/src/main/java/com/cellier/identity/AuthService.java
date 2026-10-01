@@ -11,6 +11,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 /** Casos de uso de autenticación y de perfil propio. */
 @Service
 public class AuthService {
@@ -23,19 +25,25 @@ public class AuthService {
     private final UserRepository users;
     private final UserMapper userMapper;
     private final UserHouseholdsView userHouseholds;
+    private final UserHouseholdOffboarding userHouseholdOffboarding;
+    private final RefreshTokenRepository refreshTokens;
 
     public AuthService(GoogleTokenVerifier googleTokenVerifier,
                        TokenService tokenService,
                        CurrentUserService currentUserService,
                        UserRepository users,
                        UserMapper userMapper,
-                       UserHouseholdsView userHouseholds) {
+                       UserHouseholdsView userHouseholds,
+                       UserHouseholdOffboarding userHouseholdOffboarding,
+                       RefreshTokenRepository refreshTokens) {
         this.googleTokenVerifier = googleTokenVerifier;
         this.tokenService = tokenService;
         this.currentUserService = currentUserService;
         this.users = users;
         this.userMapper = userMapper;
         this.userHouseholds = userHouseholds;
+        this.userHouseholdOffboarding = userHouseholdOffboarding;
+        this.refreshTokens = refreshTokens;
     }
 
     /**
@@ -72,6 +80,19 @@ public class AuthService {
         User user = currentUserService.requireCurrentUser();
         user.updateProfile(request.displayName(), request.themePreference(), request.locale());
         return profileOf(user);
+    }
+
+    /**
+     * Baja de cuenta. El orden importa: primero sale de los hogares —ahí puede rechazarse
+     * por R4, y en ese caso no debe quedar nada a medio deshacer—, y solo si eso tuvo éxito
+     * se revocan las sesiones y se anonimiza el usuario.
+     */
+    @Transactional
+    public void deleteCurrentAccount() {
+        User user = currentUserService.requireCurrentUser();
+        userHouseholdOffboarding.leaveAllHouseholds(user.getId());
+        refreshTokens.revokeAllForUser(user.getId(), Instant.now());
+        user.anonymize(Instant.now());
     }
 
     private User upsert(GoogleIdentity identity) {

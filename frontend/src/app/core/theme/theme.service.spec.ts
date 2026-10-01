@@ -62,4 +62,41 @@ describe('ThemeService', () => {
     theme.cycle();
     expect(theme.mode()).toBe('light');
   });
+
+  describe('seedFromAccount', () => {
+    it('aplica la preferencia de la cuenta cuando el dispositivo no tenía ninguna', () => {
+      const theme = TestBed.inject(ThemeService);
+
+      theme.seedFromAccount('DARK');
+
+      expect(theme.mode()).toBe('dark');
+    });
+
+    it('no pisa un modo que ya estaba guardado en este dispositivo', () => {
+      localStorage.setItem(CELLIER_THEME_STORAGE_KEY, 'light');
+      const theme = TestBed.inject(ThemeService);
+
+      theme.seedFromAccount('DARK');
+
+      expect(theme.mode()).toBe('light');
+    });
+
+    it('no pisa un modo elegido a mano después de arrancar', () => {
+      const theme = TestBed.inject(ThemeService);
+      theme.set('light');
+
+      theme.seedFromAccount('DARK');
+
+      expect(theme.mode()).toBe('light');
+    });
+
+    it('sólo siembra una vez: una segunda cuenta no pisa lo ya sembrado', () => {
+      const theme = TestBed.inject(ThemeService);
+
+      theme.seedFromAccount('DARK');
+      theme.seedFromAccount('SYSTEM');
+
+      expect(theme.mode()).toBe('dark');
+    });
+  });
 });
