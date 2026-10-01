@@ -1,4 +1,4 @@
-package com.cellier.support;
+package com.cellier.shared.support;
 
 import com.cellier.PostgresTestcontainerConfig;
 import jakarta.persistence.EntityManager;
@@ -15,17 +15,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * {@link IntegrationTestDatabaseCleaner} contra un Postgres real.
+ * {@link DatabaseCleaner} contra un Postgres real.
  *
- * <p>Dos cosas que las listas fabricadas de {@link IntegrationTestDatabaseCleanerTest} no
- * pueden probar: que {@code DELETION_ORDER} de verdad vacía el esquema de las seis migraciones
- * actuales sin reventar, y que una tabla nueva de verdad —creada aquí mismo, sin tocar ninguna
- * migración— hace que la limpieza reviente nombrándola en vez de dejarla con filas sueltas.
+ * <p>Dos cosas que las listas fabricadas de {@link DatabaseCleanerTest} no pueden probar: que
+ * {@code DELETION_ORDER} de verdad vacía el esquema de las migraciones actuales sin reventar, y
+ * que una tabla nueva de verdad —creada aquí mismo, sin tocar ninguna migración— hace que la
+ * limpieza reviente nombrándola en vez de dejarla con filas sueltas.
  */
 @SpringBootTest
 @Import(PostgresTestcontainerConfig.class)
-@DisplayName("IntegrationTestDatabaseCleaner contra la base real")
-class IntegrationTestDatabaseCleanerIntegrationTest {
+@DisplayName("DatabaseCleaner contra la base real")
+class DatabaseCleanerIntegrationTest {
 
     private static final String FAKE_TABLE = "cellier_test_fake_table";
 
@@ -45,11 +45,11 @@ class IntegrationTestDatabaseCleanerIntegrationTest {
     void limpiaLaBaseReal() {
         crearFilaMinima();
 
-        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
+        DatabaseCleaner.cleanAll(entityManagerFactory);
 
         EntityManager em = entityManagerFactory.createEntityManager();
         try {
-            for (String table : IntegrationTestDatabaseCleaner.DELETION_ORDER) {
+            for (String table : DatabaseCleaner.DELETION_ORDER) {
                 long filas = ((Number) em.createNativeQuery("select count(*) from " + table)
                         .getSingleResult()).longValue();
                 assertThat(filas).describedAs("la tabla %s debería quedar vacía", table).isZero();
@@ -74,7 +74,7 @@ class IntegrationTestDatabaseCleanerIntegrationTest {
                 )
                 """.formatted(FAKE_TABLE));
 
-        assertThatThrownBy(() -> IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory))
+        assertThatThrownBy(() -> DatabaseCleaner.cleanAll(entityManagerFactory))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(FAKE_TABLE);
     }

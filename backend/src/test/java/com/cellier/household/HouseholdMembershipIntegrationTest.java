@@ -11,7 +11,7 @@ import com.cellier.identity.GoogleTokenVerifier;
 import com.cellier.identity.UserRepository;
 import com.cellier.identity.domain.User;
 import com.cellier.shared.error.ConflictException;
-import com.cellier.support.IntegrationTestDatabaseCleaner;
+import com.cellier.shared.support.DatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -110,7 +110,7 @@ class HouseholdMembershipIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
+        DatabaseCleaner.cleanAll(entityManagerFactory);
 
         stubGoogle("token-ana", "sub-ana", "ana.rivas@gmail.com", "Ana Rivas");
         stubGoogle("token-bruno", "sub-bruno", "bruno.soto@gmail.com", "Bruno Soto");

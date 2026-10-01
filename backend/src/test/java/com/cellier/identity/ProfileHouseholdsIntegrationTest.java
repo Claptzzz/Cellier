@@ -1,7 +1,7 @@
 package com.cellier.identity;
 
 import com.cellier.PostgresTestcontainerConfig;
-import com.cellier.support.IntegrationTestDatabaseCleaner;
+import com.cellier.shared.support.DatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -303,7 +303,7 @@ class ProfileHouseholdsIntegrationTest {
     // ---------------------------------------------------------------------------------
 
     private void limpiar() {
-        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
+        DatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {

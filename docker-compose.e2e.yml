@@ -1,0 +1,28 @@
+# Nombre de proyecto explícito: sin esto, Compose lo deriva del nombre del directorio
+# ("cellier", el mismo que usa docker-compose.yml) y las dos redes "cellier_default"
+# chocan en cuanto el Postgres de desarrollo está corriendo a la vez — `down -v` aquí
+# fallaba con "Resource is still in use" por esa razón, no por nada de este archivo.
+name: cellier-e2e
+
+services:
+  postgres-e2e:
+    image: postgres:16-alpine
+    container_name: cellier-postgres-e2e
+    environment:
+      POSTGRES_DB: cellier_e2e
+      POSTGRES_USER: cellier
+      POSTGRES_PASSWORD: cellier
+    ports:
+      # 5555: distinto del 5433 de desarrollo, para que ambos puedan correr a la vez sin
+      # chocar. Igual que docker-compose.yml, sin volumen con nombre: cada corrida de E2E
+      # arranca de un esquema vacío a propósito, y `down -v` se lleva lo que haya.
+      - "${E2E_DB_PORT:-5555}:5432"
+    tmpfs:
+      # Sin disco: una base de pruebas que vive y muere con la corrida no necesita
+      # sobrevivir a un reinicio, y tmpfs la hace más rápida de levantar y de limpiar.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cellier -d cellier_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

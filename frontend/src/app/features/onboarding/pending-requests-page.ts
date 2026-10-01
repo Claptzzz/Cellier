@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
+import { AuthService } from '../../core/auth/auth.service';
 import { HouseholdApi } from '../../core/household/household.api';
 import { HouseholdContextService } from '../../core/household/household-context.service';
 import type { JoinRequestStatus, MyJoinRequest } from '../../core/household/household.models';
@@ -131,7 +132,8 @@ const STATUS: Record<JoinRequestStatus, StatusLook> = {
                     <div class="flex">
                       <ui-button
                         variant="secondary"
-                        [link]="['/h', request.householdId, 'pantry']">
+                        [loading]="entering() === request.id"
+                        (pressed)="enterHousehold(request)">
                         Entrar a {{ request.householdName }}
                       </ui-button>
                     </div>
@@ -164,9 +166,12 @@ export class PendingRequestsPage {
   private readonly myRequests = inject(MyJoinRequestsService);
   private readonly context = inject(HouseholdContextService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
 
   protected readonly loading = signal(true);
   protected readonly cancelling = signal<string | null>(null);
+  protected readonly entering = signal<string | null>(null);
 
   protected readonly requests = this.myRequests.requests;
   protected readonly hasHouseholds = this.context.hasHouseholds;
@@ -179,6 +184,33 @@ export class PendingRequestsPage {
 
   protected look(status: JoinRequestStatus): StatusLook {
     return STATUS[status];
+  }
+
+  /**
+   * El perfil de la sesión no sabe todavía del hogar: se aprobó por una acción de OTRA
+   * persona, mientras esta pestaña seguía abierta con la lista de hogares de antes. Sin
+   * recargarlo primero, `householdGuard` vería un hogar que no reconoce y rebotaría a
+   * quien se acaba de aceptar como si fuera ajeno —el mismo caso que resuelve
+   * `enterHousehold` en `onboarding-page.ts` tras crear un hogar, aquí con la causa
+   * inversa: el cambio lo hizo otro miembro, no esta sesión.
+   */
+  protected enterHousehold(request: MyJoinRequest): void {
+    this.entering.set(request.id);
+    const destino = ['/h', request.householdId, 'pantry'];
+
+    this.auth.loadProfile().subscribe({
+      next: () => {
+        this.entering.set(null);
+        void this.router.navigate(destino);
+      },
+      error: () => {
+        this.entering.set(null);
+        // Si falló fue al refrescar el perfil, no la pertenencia: se intenta igual y,
+        // si el perfil sigue desactualizado, el guard explica la situación con su propio
+        // aviso en vez de dejar el botón sin hacer nada.
+        void this.router.navigate(destino);
+      },
+    });
   }
 
   /**

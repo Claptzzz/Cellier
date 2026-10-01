@@ -3,7 +3,7 @@ package com.cellier.identity;
 import com.cellier.PostgresTestcontainerConfig;
 import com.cellier.identity.domain.ThemePreference;
 import com.cellier.shared.error.UnauthorizedException;
-import com.cellier.support.IntegrationTestDatabaseCleaner;
+import com.cellier.shared.support.DatabaseCleaner;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManagerFactory;
@@ -64,7 +64,7 @@ class AuthFlowIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
+        DatabaseCleaner.cleanAll(entityManagerFactory);
         when(googleTokenVerifier.verify(eq(ID_TOKEN)))
                 .thenReturn(new GoogleIdentity(GOOGLE_SUB, EMAIL, "Ana Rivas",
                         "https://lh3.googleusercontent.com/a/ACg8ocK"));
