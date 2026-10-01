@@ -12,11 +12,30 @@ function isThemeMode(value: string | null): value is ThemeMode {
   return value !== null && (MODES as readonly string[]).includes(value);
 }
 
+/** `themePreference` tal como lo guarda el backend en `UserProfile`. */
+export type AccountThemePreference = 'SYSTEM' | 'LIGHT' | 'DARK';
+
+const FROM_ACCOUNT: Record<AccountThemePreference, ThemeMode> = {
+  SYSTEM: 'system',
+  LIGHT: 'light',
+  DARK: 'dark',
+};
+
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   private readonly document = inject(DOCUMENT);
 
   private readonly window = this.document.defaultView;
+
+  /**
+   * Si este dispositivo ya tenía un modo elegido antes de que arrancara el servicio.
+   * Se lee una sola vez, antes de aplicar el default de 'system': es lo que distingue
+   * un dispositivo nuevo (sin nada guardado, listo para heredar la preferencia de la
+   * cuenta) de uno que ya eligió el suyo y no debe verse pisado por un refresco del
+   * perfil. {@link set}, {@link cycle} y {@link seedFromAccount} lo marcan en cuanto
+   * hay una elección, propia o heredada.
+   */
+  private hasLocalPreference = this.readRawStoredMode() !== null;
 
   /** Cambia solo cuando el sistema cambia de tema y estamos en modo 'system'. */
   private readonly systemPrefersDark = signal(this.readSystemPreference());
@@ -59,6 +78,7 @@ export class ThemeService {
   }
 
   set(mode: ThemeMode): void {
+    this.hasLocalPreference = true;
     this.modeSignal.set(mode);
   }
 
@@ -66,7 +86,25 @@ export class ThemeService {
   cycle(): void {
     const order: readonly ThemeMode[] = ['light', 'dark', 'system'];
     const next = order[(order.indexOf(this.modeSignal()) + 1) % order.length];
-    this.modeSignal.set(next);
+    this.set(next);
+  }
+
+  /**
+   * Aplica la preferencia guardada en la cuenta, y sólo si este dispositivo todavía no
+   * tiene ninguna elegida.
+   *
+   * <p>Es lo que hace que "Apariencia" en Ajustes persista entre dispositivos: uno
+   * nuevo, o uno con el almacenamiento vacío, arranca con el tema que se eligió en
+   * otro. Un dispositivo que ya eligió el suyo —a mano, o por una siembra anterior—
+   * no se pisa solo porque el perfil se releyó, que es lo que pasa en cada login y en
+   * cada arranque de la app.
+   */
+  seedFromAccount(preference: AccountThemePreference): void {
+    if (this.hasLocalPreference) {
+      return;
+    }
+    this.hasLocalPreference = true;
+    this.modeSignal.set(FROM_ACCOUNT[preference]);
   }
 
   /**
@@ -82,11 +120,15 @@ export class ThemeService {
   }
 
   private readStoredMode(): ThemeMode {
+    const stored = this.readRawStoredMode();
+    return isThemeMode(stored) ? stored : 'system';
+  }
+
+  private readRawStoredMode(): string | null {
     try {
-      const stored = this.window?.localStorage.getItem(CELLIER_THEME_STORAGE_KEY) ?? null;
-      return isThemeMode(stored) ? stored : 'system';
+      return this.window?.localStorage.getItem(CELLIER_THEME_STORAGE_KEY) ?? null;
     } catch {
-      return 'system';
+      return null;
     }
   }
 

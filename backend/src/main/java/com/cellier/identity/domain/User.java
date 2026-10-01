@@ -92,6 +92,21 @@ public class User extends AuditableEntity {
         return deletedAt == null;
     }
 
+    /**
+     * Baja de cuenta: anonimiza los datos personales y marca la fila como borrada.
+     *
+     * <p>La fila sigue existiendo a propósito —no es un borrado físico— porque el historial
+     * de movimientos referencia a este usuario como autor y debe sobrevivirlo. El correo se
+     * deriva del identificador para no chocar con la restricción de unicidad ni con una
+     * futura cuenta que use el mismo correo.
+     */
+    public void anonymize(Instant at) {
+        this.email = "usuario-eliminado-" + id + "@cellier.invalid";
+        this.displayName = "Usuario eliminado";
+        this.avatarUrl = null;
+        this.deletedAt = at;
+    }
+
     public UUID getId() {
         return id;
     }
