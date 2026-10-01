@@ -39,6 +39,12 @@ testem.log
 /typings
 __screenshots__/
 
+# Playwright (frontend/e2e)
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/.auth/
+/blob-report/
+
 # System files
 .DS_Store
 Thumbs.db

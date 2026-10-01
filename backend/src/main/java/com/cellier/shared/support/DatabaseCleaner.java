@@ -1,4 +1,4 @@
-package com.cellier.support;
+package com.cellier.shared.support;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -12,8 +12,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Vacía la base entera entre tests, en el orden que exigen las claves foráneas, desde UN solo
- * sitio.
+ * Vacía la base entera, en el orden que exigen las claves foráneas, desde UN solo sitio.
+ *
+ * <p>Vive en {@code main} y no en {@code test} porque la tiene que poder llamar tanto un test de
+ * integración de JUnit como el endpoint de reinicio de las pruebas E2E de Playwright
+ * ({@code TestSupportController}, bajo el perfil {@code test}) — y ese endpoint corre dentro de
+ * la aplicación real, que nunca carga el classpath de {@code test}.
  *
  * <p>Antes de esta clase, cada clase de test de integración mantenía su propia secuencia de
  * {@code deleteAll()} a mano. Ha fallado dos veces por la misma razón, en dos incrementos
@@ -33,12 +37,12 @@ import java.util.Set;
  * tablas que existen de verdad ({@link #verifyCoversAllTables}), y que el orden declarado no
  * contradice ninguna clave foránea real ({@link #verifyOrderRespectsForeignKeys}). Añadir una
  * tabla y olvidar registrarla aquí, o registrarla en el sitio equivocado, revienta en esta
- * clase, nombrando la tabla, la próxima vez que cualquier test llame a {@link #cleanAll} — no
- * en otra clase, semanas después, con la suite completa como único testigo.
+ * clase, nombrando la tabla, la próxima vez que cualquier llamante invoque {@link #cleanAll} —
+ * no en otra clase, semanas después, con la suite completa (o la demo de E2E) como único testigo.
  */
-public final class IntegrationTestDatabaseCleaner {
+public final class DatabaseCleaner {
 
-    /** La gestiona Flyway, no los tests: nunca se toca. */
+    /** La gestiona Flyway, no quien llama: nunca se toca. */
     private static final String FLYWAY_TABLE = "flyway_schema_history";
 
     /**
@@ -55,7 +59,7 @@ public final class IntegrationTestDatabaseCleaner {
             "users"
     );
 
-    private IntegrationTestDatabaseCleaner() {
+    private DatabaseCleaner() {
     }
 
     /**
@@ -94,11 +98,11 @@ public final class IntegrationTestDatabaseCleaner {
         List<String> sinDeclarar = liveTables.stream().filter((t) -> !declaradas.contains(t)).toList();
         if (!sinDeclarar.isEmpty()) {
             throw new IllegalStateException(
-                    "IntegrationTestDatabaseCleaner.DELETION_ORDER no conoce " + sinDeclarar
+                    "DatabaseCleaner.DELETION_ORDER no conoce " + sinDeclarar
                             + ". Una migración añadió esa tabla y nadie la registró aquí: sin "
-                            + "hacerlo, la limpieza entre tests deja filas sueltas que rompen otra "
-                            + "clase de test, no ésta. Añádela a DELETION_ORDER, antes que las "
-                            + "tablas que referencia.");
+                            + "hacerlo, la limpieza deja filas sueltas que rompen otra clase de "
+                            + "test, o el reinicio entre pruebas E2E, no ésta. Añádela a "
+                            + "DELETION_ORDER, antes que las tablas que referencia.");
         }
     }
 
@@ -122,8 +126,8 @@ public final class IntegrationTestDatabaseCleaner {
         }
         if (!violaciones.isEmpty()) {
             throw new IllegalStateException(
-                    "IntegrationTestDatabaseCleaner.DELETION_ORDER contradice estas claves "
-                            + "foráneas: " + violaciones + ".");
+                    "DatabaseCleaner.DELETION_ORDER contradice estas claves foráneas: "
+                            + violaciones + ".");
         }
     }
 

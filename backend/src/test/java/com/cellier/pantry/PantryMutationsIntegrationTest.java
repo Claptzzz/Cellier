@@ -11,7 +11,7 @@ import com.cellier.identity.GoogleTokenVerifier;
 import com.cellier.identity.UserRepository;
 import com.cellier.pantry.domain.MovementType;
 import com.cellier.pantry.domain.StockMovement;
-import com.cellier.support.IntegrationTestDatabaseCleaner;
+import com.cellier.shared.support.DatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -684,7 +684,7 @@ class PantryMutationsIntegrationTest {
     }
 
     private void limpiar() {
-        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
+        DatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     private void stubGoogle(String idToken, String sub, String email, String nombre) {

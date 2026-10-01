@@ -1,7 +1,7 @@
 package com.cellier.identity;
 
 import com.cellier.PostgresTestcontainerConfig;
-import com.cellier.support.IntegrationTestDatabaseCleaner;
+import com.cellier.shared.support.DatabaseCleaner;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,7 +61,7 @@ class AccountDeletionIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        IntegrationTestDatabaseCleaner.cleanAll(entityManagerFactory);
+        DatabaseCleaner.cleanAll(entityManagerFactory);
     }
 
     @Nested
