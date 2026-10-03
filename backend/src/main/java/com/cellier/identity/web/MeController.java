@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/me")
-@Tag(name = "Me", description = "Perfil del usuario autenticado.")
+@Tag(name = "Cuenta", description = "Perfil, preferencias y baja de la cuenta del usuario autenticado.")
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class MeController {
 

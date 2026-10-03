@@ -13,6 +13,18 @@ Backend Spring Boot y frontend Angular viven en el mismo repositorio y se empaqu
 └── docker-compose.yml
 ```
 
+## Capturas
+
+Claro y oscuro, escritorio (1440px) y móvil (375px). Más capturas de verificación —onboarding,
+gestión de miembros, estados vacíos y de carga— en [`docs/ui-shots/`](docs/ui-shots/).
+
+| | Claro | Oscuro |
+|---|---|---|
+| **Login · escritorio** | ![Login, claro, escritorio](docs/ui-shots/login-1440-light.png) | ![Login, oscuro, escritorio](docs/ui-shots/login-1440-dark.png) |
+| **Login · móvil** | ![Login, claro, móvil](docs/ui-shots/login-375-light.png) | ![Login, oscuro, móvil](docs/ui-shots/login-375-dark.png) |
+| **Despensa · escritorio** | ![Despensa, claro, escritorio](docs/ui-shots/despensa-lista-1440-light.png) | ![Despensa, oscuro, escritorio](docs/ui-shots/despensa-lista-1440-dark.png) |
+| **Despensa · móvil** | ![Despensa, claro, móvil](docs/ui-shots/despensa-lista-375-light.png) | ![Despensa, oscuro, móvil](docs/ui-shots/despensa-lista-375-dark.png) |
+
 ## Requisitos
 
 | Herramienta | Versión | Nota |
@@ -228,6 +240,20 @@ cd backend  && ./mvnw test          # backend (usa Testcontainers: requiere Dock
 cd frontend && npx ng test --watch=false   # frontend
 ```
 
+### End-to-end (Playwright)
+
+```bash
+cd frontend
+npm run e2e          # headless, una vez
+npm run e2e:ui        # modo interactivo de Playwright
+```
+
+`npm run e2e` levanta antes un Postgres efímero dedicado (`docker-compose.e2e.yml`, puerto
+5555, **nunca** el de desarrollo) y arranca el backend con el perfil `test`, que habilita un
+login sin pasar por Google y un endpoint de reseteo de esquema — ambos inexistentes fuera de
+ese perfil. Al terminar, `global-teardown` baja el contenedor. No hace falta el backend ni el
+frontend ya corriendo: Playwright arranca los suyos.
+
 ## Perfiles de configuración
 
 | Perfil | Cuándo | Comportamiento |
@@ -252,4 +278,10 @@ entorno real siempre tiene prioridad sobre el archivo.
 - El backend se organiza por feature: `identity`, `household`, `catalog`, `pantry`,
   `template`, `recipe`, más `shared` para lo transversal.
 
-Las decisiones de arquitectura se registran en [`docs/adr/`](docs/adr/).
+Las decisiones de arquitectura se registran en [`docs/adr/`](docs/adr/). La arquitectura
+general (capas, módulos, despliegue, flujo de autenticación) está en
+[`docs/arquitectura.md`](docs/arquitectura.md), y el modelo de datos completo en
+[`docs/modelo-datos.md`](docs/modelo-datos.md).
+
+Para contribuir —convención de ramas, Conventional Commits, definición de "terminado"— ver
+[`CONTRIBUTING.md`](CONTRIBUTING.md).

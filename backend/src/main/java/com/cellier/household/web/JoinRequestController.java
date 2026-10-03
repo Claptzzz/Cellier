@@ -29,15 +29,16 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Pedir entrar en un hogar, desde el lado de quien lo pide.
+ *
+ * <p>Conocer el código de ingreso no da acceso. Enviarlo abre una solicitud pendiente
+ * que un administrador del hogar debe aprobar; hasta entonces el hogar sigue siendo
+ * invisible para el solicitante, y consultarlo responde 404 como cualquier hogar ajeno.
+ */
 @RestController
 @RequestMapping("/api/v1/join-requests")
-@Tag(name = "Join requests", description = """
-        Pedir entrar en un hogar, desde el lado de quien lo pide.
-
-        **Conocer el código de ingreso no da acceso.** Enviarlo abre una solicitud pendiente
-        que un administrador del hogar debe aprobar; hasta entonces el hogar sigue siendo
-        invisible para el solicitante, y consultarlo responde `404` como cualquier hogar ajeno.
-        """)
+@Tag(name = "Hogares")
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class JoinRequestController {
 

@@ -37,23 +37,31 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * La despensa del hogar: qué hay y cuánto.
+ *
+ * <p>Cada artículo es un producto del catálogo con su cantidad, expresada en la unidad
+ * canónica de ese producto. No hay conversión, así que comparar lo que hay con lo que
+ * hace falta es una resta.
+ *
+ * <p>Toda modificación deja un movimiento, y la suma de los movimientos de un artículo
+ * es su cantidad actual. Por eso consumir registra lo que se gastó de verdad —que puede
+ * ser menos de lo pedido, si no había tanto— y un ajuste que no cambia la cantidad no
+ * escribe nada.
+ *
+ * <p>Los artículos llevan bloqueo optimista: si otra persona del hogar modificó el
+ * mismo producto entre tu lectura y tu escritura, la petición responde 409 en vez de
+ * pisar su cambio.
+ */
 @RestController
 @RequestMapping("/api/v1/households/{householdId}/pantry/items")
-@Tag(name = "Pantry", description = """
-        La despensa del hogar: qué hay y cuánto.
+@Tag(name = "Despensa", description = """
+        La despensa y el catálogo de productos del hogar.
 
-        Cada artículo es un producto del catálogo con su cantidad, expresada **en la unidad
-        canónica de ese producto**. No hay conversión, así que comparar lo que hay con lo que
-        hace falta es una resta.
-
-        **Toda modificación deja un movimiento**, y la suma de los movimientos de un artículo
-        es su cantidad actual. Por eso consumir registra lo que se gastó de verdad —que puede
-        ser menos de lo pedido, si no había tanto— y un ajuste que no cambia la cantidad no
-        escribe nada.
-
-        Los artículos llevan **bloqueo optimista**: si otra persona del hogar modificó el
-        mismo producto entre tu lectura y tu escritura, la petición responde `409` en vez de
-        pisar su cambio.
+        Cada artículo de la despensa es un producto del catálogo con su cantidad, expresada
+        **en la unidad canónica de ese producto** (no hay conversión entre unidades). Toda
+        modificación de cantidad deja un movimiento en la bitácora, y los artículos llevan
+        **bloqueo optimista**: una escritura sobre un estado que ya cambió responde `409`.
         """)
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class PantryItemController {

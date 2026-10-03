@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 @Schema(name = "QuantityRequest", description = "Cantidad a gastar o reponer, en la unidad del producto.")
 public record QuantityRequest(
 
-        @Schema(description = "Cantidad, mayor que cero.", example = "2")
+        @Schema(description = "Cantidad a mover, en la unidad del producto. Mayor que cero.", example = "2")
         @NotNull(message = "La cantidad es obligatoria")
         @DecimalMin(value = "0", inclusive = false, message = "La cantidad tiene que ser mayor que cero")
         BigDecimal quantity

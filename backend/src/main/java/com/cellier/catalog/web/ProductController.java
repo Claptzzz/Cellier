@@ -33,23 +33,25 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * El catálogo de productos de un hogar: qué cosas existen y en qué unidad se miden.
+ *
+ * <p>Cada producto define una unidad canónica y no hay conversión entre unidades. Todas
+ * las cantidades del sistema —despensa, plantillas, recetas— se expresan en la unidad de
+ * su producto, de modo que comparar lo que hay con lo que hace falta es una resta.
+ *
+ * <p>Es una restricción deliberada: los factores de conversión dependen del producto (un
+ * kilo de harina no ocupa lo mismo que un kilo de arroz) y algunos no existen (no hay
+ * gramos en dos lechugas). Por eso la unidad no se puede cambiar una vez creado el
+ * producto: hacerlo reinterpretaría las cantidades ya registradas.
+ *
+ * <p>El catálogo es de cada hogar. El nombre es único dentro del hogar sin distinguir
+ * mayúsculas: «Leche» y «leche» son el mismo producto.
+ */
 @RestController
+// La descripción del tag "Despensa" vive en PantryItemController; aquí sólo se reutiliza el nombre.
 @RequestMapping("/api/v1/households/{householdId}/products")
-@Tag(name = "Products", description = """
-        El catálogo de productos de un hogar: qué cosas existen y en qué unidad se miden.
-
-        **Cada producto define una unidad canónica y no hay conversión entre unidades.** Todas
-        las cantidades del sistema —despensa, plantillas, recetas— se expresan en la unidad de
-        su producto, de modo que comparar lo que hay con lo que hace falta es una resta.
-
-        Es una restricción deliberada: los factores de conversión dependen del producto (un
-        kilo de harina no ocupa lo mismo que un kilo de arroz) y algunos no existen (no hay
-        gramos en dos lechugas). Por eso **la unidad no se puede cambiar** una vez creado el
-        producto: hacerlo reinterpretaría las cantidades ya registradas.
-
-        El catálogo es de cada hogar. El nombre es único dentro del hogar sin distinguir
-        mayúsculas: «Leche» y «leche» son el mismo producto.
-        """)
+@Tag(name = "Despensa")
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class ProductController {
 
