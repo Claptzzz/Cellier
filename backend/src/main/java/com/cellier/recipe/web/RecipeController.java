@@ -36,35 +36,42 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * El recetario del hogar: qué hace falta y cómo se hace.
+ *
+ * <p>Una receta tiene dos partes. Sus ingredientes son una lista de productos con
+ * cantidad, igual que una plantilla, salvo que cada línea puede marcarse opcional:
+ * "sal al gusto" no puede dejar la receta entera en falta porque el bote esté vacío. Sus
+ * pasos son sólo texto ordenado y nunca entran en ese cálculo.
+ *
+ * <p>El detalle no es el reporte. {@code GET /{id}} es la receta tal como se edita, sin
+ * cruzarla contra la despensa. La disponibilidad —cuánto hay, cuánto falta, si se puede
+ * cocinar ahora— vive en {@code GET /{id}/availability}, su propio endpoint: así quien
+ * sólo abre la receta para leerla o renombrarla no paga ese cruce.
+ *
+ * <p>La disponibilidad se calcula, no se guarda, igual que el reporte de compras: para
+ * cada ingrediente no opcional se compara lo que hace falta con lo que hay en la
+ * despensa. READY exige que haya al menos un ingrediente no opcional y que todos se
+ * cumplan; una receta sin ninguno —recién creada, o con todo marcado opcional— es
+ * MISSING, no READY: no hay nada que comprobar todavía, y eso no es lo mismo que estar
+ * lista.
+ *
+ * <p>Cualquier miembro puede crear, editar y borrar recetas. No es una acción de
+ * administrador: el recetario es de la casa, no de quien lo escribió.
+ *
+ * <p>Un ingrediente por {@code productName} que no exista en el catálogo se crea en la
+ * misma transacción; si ya existe con otra unidad, la petición se rechaza con 409 en vez
+ * de reinterpretar la cantidad.
+ */
 @RestController
 @RequestMapping("/api/v1/households/{householdId}/recipes")
-@Tag(name = "Recipes", description = """
+@Tag(name = "Recetas", description = """
         El recetario del hogar: qué hace falta y cómo se hace.
 
-        Una receta tiene dos partes. Sus **ingredientes** son una lista de productos con
-        cantidad, igual que una plantilla, salvo que cada línea puede marcarse **opcional**:
-        "sal al gusto" no puede dejar la receta entera en falta porque el bote esté vacío. Sus
-        **pasos** son sólo texto ordenado y nunca entran en ese cálculo.
-
-        **El detalle no es el reporte.** `GET /{id}` es la receta tal como se edita, sin
-        cruzarla contra la despensa. La disponibilidad —cuánto hay, cuánto falta, si se puede
-        cocinar ahora— vive en `GET /{id}/availability`, su propio endpoint: así quien sólo
-        abre la receta para leerla o renombrarla no paga ese cruce.
-
-        **La disponibilidad se calcula, no se guarda**, igual que el reporte de compras: para
-        cada ingrediente no opcional se compara lo que hace falta con lo que hay en la
-        despensa. `READY` exige que haya al menos un ingrediente no opcional y que todos se
-        cumplan; una receta sin ninguno —recién creada, o con todo marcado opcional— es
-        `MISSING`, no `READY`: no hay nada que comprobar todavía, y eso no es lo mismo que
-        estar lista.
-
-        **Cualquier miembro puede crear, editar y borrar recetas.** No es una acción de
-        administrador: el recetario es de la casa, no de quien lo escribió.
-
-        Las cantidades van en la **unidad canónica del producto**, como todas las del sistema.
-        Un ingrediente por `productName` que no exista en el catálogo se crea en la misma
-        transacción; si ya existe con otra unidad, la petición se rechaza con `409` en vez de
-        reinterpretar la cantidad.
+        Una receta tiene **ingredientes** (producto, cantidad y si es opcional) y **pasos**
+        de texto. `GET /{id}` es la receta tal como se edita; `GET /{id}/availability` cruza
+        sus ingredientes no opcionales contra la despensa y calcula al vuelo si está `READY`
+        o `MISSING`, sin guardar nada. Cualquier miembro puede crear, editar y borrar recetas.
         """)
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class RecipeController {

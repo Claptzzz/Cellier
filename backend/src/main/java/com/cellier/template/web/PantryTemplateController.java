@@ -37,22 +37,30 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Plantillas de despensa: lo que el hogar quiere tener en casa.
+ *
+ * <p>Una plantilla es una lista de deseos con cantidades —«de esto quiero tener diez»—,
+ * no una compra ni un estado. Es el listón contra el que se mide la despensa: de restar
+ * una cosa de la otra sale el reporte de compras.
+ *
+ * <p>Un hogar puede tener varias, porque la compra semanal no se parece a la del asado.
+ *
+ * <p>Cualquier miembro puede crear, editar y borrar plantillas. No es una acción de
+ * administrador: las plantillas son de la casa, no de quien las escribió. Por eso
+ * {@code createdBy} viaja como dato y nunca como autoridad.
+ *
+ * <p>Las cantidades van en la unidad canónica del producto, como todas las del sistema.
+ */
 @RestController
 @RequestMapping("/api/v1/households/{householdId}/templates")
-@Tag(name = "Templates", description = """
+@Tag(name = "Plantillas", description = """
         Plantillas de despensa: lo que el hogar quiere tener en casa.
 
         Una plantilla es una **lista de deseos con cantidades** —«de esto quiero tener diez»—,
-        no una compra ni un estado. Es el listón contra el que se mide la despensa: de restar
-        una cosa de la otra sale el reporte de compras.
-
-        Un hogar puede tener varias, porque la compra semanal no se parece a la del asado.
-
-        **Cualquier miembro puede crear, editar y borrar plantillas.** No es una acción de
-        administrador: las plantillas son de la casa, no de quien las escribió. Por eso
-        `createdBy` viaja como dato y nunca como autoridad.
-
-        Las cantidades van en la **unidad canónica del producto**, como todas las del sistema.
+        no una compra ni un estado. Cualquier miembro puede crearla, editarla y borrarla: no
+        es una acción de administrador. El reporte (`GET .../report`) la compara al vuelo
+        contra la despensa actual y calcula los faltantes; no se guarda nada del cálculo.
         """)
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class PantryTemplateController {

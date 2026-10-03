@@ -14,6 +14,7 @@ public record PantryItemResponse(
         @Schema(description = "Identificador del artículo.", example = "7a1c4e93-6d05-4b28-91f7-0c3a8d5e2b46")
         UUID id,
 
+        @Schema(description = "Producto del catálogo al que corresponde este artículo.")
         PantryProductResponse product,
 
         @Schema(description = "Cuánto hay, en la unidad del producto.", example = "690.000")

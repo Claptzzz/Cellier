@@ -26,14 +26,15 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * La bandeja de solicitudes de un hogar, desde el lado de quien decide.
+ *
+ * <p>Todo lo de aquí es exclusivo de los administradores: son las operaciones por las
+ * que alguien entra en el hogar, y por tanto obtiene acceso a su despensa.
+ */
 @RestController
 @RequestMapping("/api/v1/households/{householdId}/join-requests")
-@Tag(name = "Household join requests", description = """
-        La bandeja de solicitudes de un hogar, desde el lado de quien decide.
-
-        Todo lo de aquí es **exclusivo de los administradores**: son las operaciones por las
-        que alguien entra en el hogar, y por tanto obtiene acceso a su despensa.
-        """)
+@Tag(name = "Hogares")
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class HouseholdJoinRequestController {
 

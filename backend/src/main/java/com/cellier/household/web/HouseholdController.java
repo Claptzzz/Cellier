@@ -36,7 +36,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/households")
-@Tag(name = "Households", description = """
+@Tag(name = "Hogares", description = """
         Hogares: el ámbito al que pertenece todo lo demás en Cellier.
 
         Cada operación sobre un hogar concreto comprueba primero la membresía del usuario

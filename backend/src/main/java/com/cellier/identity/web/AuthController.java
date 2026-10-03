@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Auth", description = """
+@Tag(name = "Autenticación", description = """
         Inicio de sesión con Google y gestión de las credenciales propias de Cellier.
 
         El cliente obtiene un ID token de Google Identity Services y lo canjea aquí. El ID

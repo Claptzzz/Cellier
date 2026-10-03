@@ -29,15 +29,16 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Quién pertenece a un hogar y con qué rol.
+ *
+ * <p>Sobre todas estas operaciones rige una invariante: el hogar conserva siempre al
+ * menos un administrador. No se puede quitarle el rol al último, ni expulsarlo, ni
+ * dejar que se salga; cualquiera de las tres responde 409 explicando qué hacer antes.
+ */
 @RestController
 @RequestMapping("/api/v1/households/{householdId}/members")
-@Tag(name = "Household members", description = """
-        Quién pertenece a un hogar y con qué rol.
-
-        Sobre todas estas operaciones rige una invariante: **el hogar conserva siempre al menos
-        un administrador**. No se puede quitarle el rol al último, ni expulsarlo, ni dejar que
-        se salga; cualquiera de las tres responde `409` explicando qué hacer antes.
-        """)
+@Tag(name = "Hogares")
 @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME)
 public class HouseholdMemberController {
 
