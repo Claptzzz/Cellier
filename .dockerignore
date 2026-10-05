@@ -1,0 +1,39 @@
+# Contexto de build: solo lo que hace falta para compilar.
+# Sin esto el contexto son cientos de megas (node_modules y target solos ya pasan de 1 GB)
+# y ademas se colarian artefactos locales que la imagen debe generar ella misma.
+
+# --- Salidas de compilacion ---
+**/target/
+**/node_modules/
+**/dist/
+frontend/.angular/
+backend/.frontend-toolchain/
+
+# --- Control de versiones y herramientas ---
+.git/
+.github/
+.gitignore
+.dockerignore
+.claude/
+.idea/
+.vscode/
+**/.DS_Store
+
+# --- Secretos: NUNCA entran en la imagen ---
+# El client id llega como build arg; el resto, como variables de entorno en ejecucion.
+.env
+.env.*
+!.env.example
+frontend/src/environments/environment.development.ts
+frontend/src/environments/environment.prod.ts
+
+# --- Verificacion y documentacion: no se compila nada con esto ---
+docs/ui-shots/
+frontend/e2e/
+frontend/test-results/
+frontend/playwright-report/
+**/*.log
+
+# --- Compose: la imagen no los usa ---
+docker-compose.yml
+docker-compose.e2e.yml

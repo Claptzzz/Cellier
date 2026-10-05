@@ -173,11 +173,27 @@ spring:
   jpa:
     show-sql: false
 
+server:
+  # Railway asigna el puerto por PORT y espera que el contenedor escuche ahi: con el 8080
+  # fijo el healthcheck no pasa nunca y el despliegue se queda reintentando. El valor por
+  # defecto sigue siendo 8080, asi que arrancar el perfil prod en local no cambia.
+  # Solo en este perfil: dev y test siguen leyendo SERVER_PORT del bloque comun.
+  port: ${PORT:8080}
+
 logging:
   level:
     com.cellier: ${LOG_LEVEL_CELLIER:INFO}
     root: WARN
+    # root: WARN silenciaba a Flyway, que informa en INFO. En el primer despliegue contra
+    # una base vacia ese es justo el log que hace falta leer: que aplique de V1 a V6 y
+    # cuantos milisegundos tardo. dev y test ya lo tenian; prod no.
+    org.flywaydb: INFO
 
 springdoc:
+  # Swagger UI y el esquema OpenAPI van ABIERTOS en prod: son requisito de entrega.
+  # SecurityConfig ya deja publicas /swagger-ui.html, /swagger-ui/**, /v3/api-docs y
+  # /v3/api-docs/**; lo unico que faltaba era que springdoc los registrara.
   swagger-ui:
-    enabled: ${SWAGGER_UI_ENABLED:false}
+    enabled: ${SWAGGER_UI_ENABLED:true}
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
