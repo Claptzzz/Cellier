@@ -191,6 +191,110 @@ router de Angular funcionan al recargar la página: las rutas desconocidas se re
 Sin el perfil `-Pfrontend`, `./mvnw clean package` construye solo el backend (más rápido para
 iterar en la API).
 
+## Despliegue
+
+La aplicación se despliega como **una sola imagen de contenedor**: el mismo proceso sirve la
+API y la SPA. La plataforma de destino es [Railway](https://railway.app), que construye desde
+el `Dockerfile` de la raíz, inyecta el puerto por `PORT` y conecta un servicio PostgreSQL
+aparte.
+
+### Construir la imagen
+
+```bash
+docker build --build-arg GOOGLE_CLIENT_ID=<tu client id real> -t cellier .
+```
+
+Dos etapas, Java 25 en ambas (la misma versión que `<java.version>` en `backend/pom.xml`):
+
+1. **Build** — `eclipse-temurin:25-jdk`. Ejecuta `./mvnw -Pfrontend package -DskipTests`, que
+   descarga Node, construye Angular y deja la SPA en `target/classes/static`, dentro del JAR.
+   Imagen Debian y no Alpine a propósito: el Node que descarga `frontend-maven-plugin` está
+   enlazado contra glibc y en musl no arranca. Por el mismo motivo la etapa instala
+   `libatomic1`, sin el cual Node 26 muere con `error while loading shared libraries`.
+2. **Runtime** — `eclipse-temurin:25-jre`, usuario sin privilegios, solo el JAR.
+
+`GOOGLE_CLIENT_ID` va como *build arg* porque `frontend/scripts/sync-environment.mjs` lo
+**inlina en el bundle de Angular** en tiempo de compilación. No es un secreto en sentido
+estricto —viaja al navegador en cada carga— pero no se versiona. El script da prioridad a la
+variable de entorno sobre el `.env`, y no falla si el archivo no existe: justo el caso del
+contenedor.
+
+La imagen final lleva `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75`. Sin eso la JVM mira la
+memoria del **host** y no la del contenedor, calcula un heap que no cabe, y el proceso muere
+por OOM del cgroup sin dejar ni un stacktrace.
+
+### Probar la imagen en local
+
+```bash
+docker network create cellier-prueba
+docker run -d --name cellier-pg --network cellier-prueba \
+  -e POSTGRES_DB=cellier_prod -e POSTGRES_USER=cellier_prod \
+  -e POSTGRES_PASSWORD=clave-de-prueba postgres:16-alpine
+
+docker run --rm --name cellier-app --network cellier-prueba -p 9090:9090 \
+  -e SPRING_PROFILES_ACTIVE=prod -e PORT=9090 \
+  -e DB_HOST=cellier-pg -e DB_PORT=5432 -e DB_NAME=cellier_prod \
+  -e DB_USER=cellier_prod -e DB_PASSWORD=clave-de-prueba \
+  -e GOOGLE_CLIENT_ID=<el real> \
+  -e JWT_SECRET="$(openssl rand -base64 48)" \
+  cellier
+```
+
+Un `PORT` distinto de 8080 a propósito: es la única forma de comprobar que la aplicación lo
+lee de verdad y no está escuchando en el puerto fijo.
+
+### Variables de entorno en producción
+
+La aplicación **no lee ningún `.env` en el contenedor**: todo llega por el entorno. En el
+perfil `prod` las obligatorias no tienen valor por defecto, así que si falta una la
+aplicación no arranca — y eso es deliberado: es preferible a arrancar con una contraseña de
+desarrollo.
+
+| Variable | ¿Obligatoria? | Por defecto | Qué es |
+|---|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | **sí** | `dev` | Tiene que valer `prod`. Sin esto arranca en `dev`, con contraseñas de desarrollo |
+| `DB_HOST` | **sí** | — | Host del PostgreSQL |
+| `DB_PORT` | **sí** | — | Puerto del PostgreSQL |
+| `DB_NAME` | **sí** | — | Nombre de la base |
+| `DB_USER` | **sí** | — | Usuario |
+| `DB_PASSWORD` | **sí** | — | Contraseña |
+| `GOOGLE_CLIENT_ID` | **sí** | — | Client id de OAuth de Google. Se exige como `aud` de cada ID token. **Debe ser el mismo** que se pasó como build arg al construir la imagen, o el login falla con un token que el backend rechaza |
+| `JWT_SECRET` | **sí** | — | Clave HMAC de los access token. **Mínimo 32 bytes.** Genera una con `openssl rand -base64 48` y no reutilices la del `.env.example`: está en el repositorio y cualquiera podría firmar tokens válidos |
+| `PORT` | no | `8080` | Puerto de escucha. Railway lo inyecta solo; en local no hace falta |
+| `JWT_ISSUER` | no | `https://cellier.app` | Valor del claim `iss` de los tokens que emite Cellier |
+| `DB_POOL_MAX` | no | `10` | Tamaño máximo del pool de Hikari |
+| `LOG_LEVEL_CELLIER` | no | `INFO` | Nivel de log del paquete `com.cellier` |
+| `MANAGEMENT_ENDPOINTS` | no | `health,info` | Endpoints de actuator expuestos por HTTP |
+| `SWAGGER_UI_ENABLED` | no | `true` | Publicar Swagger UI en `/swagger-ui.html` |
+| `API_DOCS_ENABLED` | no | `true` | Publicar el esquema OpenAPI en `/v3/api-docs` |
+
+`SERVER_PORT` **no se usa en `prod`**: ahí el puerto sale de `PORT`. Sigue funcionando en
+`dev` y en `test`.
+
+#### Si la plataforma es Railway
+
+El servicio PostgreSQL de Railway publica sus credenciales con **otros nombres**
+(`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`) y un `DATABASE_URL` que **no es
+una URL JDBC**. Hay que mapearlas a mano en las variables del servicio:
+
+```
+DB_HOST     = ${{Postgres.PGHOST}}
+DB_PORT     = ${{Postgres.PGPORT}}
+DB_NAME     = ${{Postgres.PGDATABASE}}
+DB_USER     = ${{Postgres.PGUSER}}
+DB_PASSWORD = ${{Postgres.PGPASSWORD}}
+```
+
+Como *healthcheck* se usa `/actuator/health`, que es público: no pide token y devuelve 200 en
+cuanto la aplicación está lista. El resto de `/actuator/**` sí exige autenticación.
+
+### Qué hace Flyway en el primer arranque
+
+Contra una base vacía aplica las migraciones `V1` a `V6` y crea `flyway_schema_history`.
+`spring.jpa.hibernate.ddl-auto` está en `validate`: Hibernate **no** modifica el esquema,
+solo comprueba que coincide con las entidades. En `prod` el log de Flyway sale en INFO
+aunque el resto esté en WARN, precisamente para poder leer ese primer arranque.
+
 ## Autenticación
 
 Cellier usa Google Sign-In para identificar al usuario, pero **no** reutiliza el token de
@@ -254,12 +358,52 @@ login sin pasar por Google y un endpoint de reseteo de esquema — ambos inexist
 ese perfil. Al terminar, `global-teardown` baja el contenedor. No hace falta el backend ni el
 frontend ya corriendo: Playwright arranca los suyos.
 
+## Integración continua
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre **en cada push a `main` y en
+cada pull request**, con dos trabajos en paralelo:
+
+| Trabajo | Qué hace |
+|---|---|
+| **Backend** | `actions/setup-java` con Temurin 25 y caché de Maven, y `./mvnw -B -ntp verify` desde `backend/` |
+| **Frontend** | `actions/setup-node` con caché de npm sobre `frontend/package-lock.json`, y `npm ci`, `npm test` y `npm run build` desde `frontend/` |
+
+Los dos son independientes a propósito: si el frontend falla, el resultado del backend sigue
+siendo útil.
+
+El trabajo del backend **no declara ningún servicio de base de datos**. La suite usa
+Testcontainers, que levanta su propio PostgreSQL contra el Docker que ya trae
+`ubuntu-latest`. Si algún día se cambia de runner, esto es lo primero que deja de funcionar.
+
+### El secret que hace falta
+
+| Secret | Dónde se define | Para qué |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | *Settings › Secrets and variables › Actions* | `sync-environment.mjs` lo inlina en el bundle durante `npm run build` |
+
+Es el único. Si no está definido, el build de Angular **no falla** —genera un bundle sin
+client id y sale con código 0—, así que el workflow lleva un paso extra que comprueba que el
+client id aparece de verdad en `dist/`. Sin él, el pipeline pasaría en verde con un bundle
+que no puede iniciar sesión.
+
+### Lo que el pipeline no hace todavía
+
+Los scripts del arnés visual —`frontend/scripts/shots.mjs` y
+`frontend/scripts/verify-reachability.mjs`— **no corren en CI**. Necesitan un servidor de
+desarrollo levantado, y el recorrido de alcanzabilidad solo ya tarda unos veinte minutos.
+
+Queda como mejora futura, y no es trivial: haría falta arrancar `ng serve` como paso previo,
+esperar a que responda, y recortar el recorrido para que quepa en un tiempo razonable. Hasta
+entonces se ejecutan a mano antes de cerrar cada incremento de frontend, que es como se ha
+venido haciendo.
+
 ## Perfiles de configuración
 
 | Perfil | Cuándo | Comportamiento |
 |---|---|---|
 | `dev` | por defecto | valores por defecto pensados para el `docker-compose` de este repo; Swagger UI activo |
-| `prod` | `SPRING_PROFILES_ACTIVE=prod` | **sin valores por defecto**: si falta una variable, la app no arranca; Swagger UI apagado salvo `SWAGGER_UI_ENABLED=true` |
+| `test` | `SPRING_PROFILES_ACTIVE=test` | para los E2E de Playwright: Postgres efímero del puerto 5555 y login sin Google |
+| `prod` | `SPRING_PROFILES_ACTIVE=prod` | **sin valores por defecto**: si falta una variable, la app no arranca. Swagger UI y `/v3/api-docs` **encendidos** (requisito de entrega); el puerto lo toma de `PORT` |
 
 Todas las variables están documentadas en `.env.example`.
 
