@@ -57,7 +57,27 @@ logs/
 # como memoria. Estuvieron fuera ocho incrementos por esta linea.
 # Lo que no va son las capturas del arnes: 206 ficheros y 24 MB regenerados en cada pasada.
 # Son salida, no documentacion.
-docs/ui-shots/
+#
+# Se ignora el CONTENIDO y no el directorio: git no desciende a un directorio excluido, asi
+# que con `docs/ui-shots/` a secas las excepciones de abajo no se aplicarian nunca. Es la
+# misma trampa que tenia `.vscode/` unas lineas mas arriba.
+docs/ui-shots/*
+
+# EXCEPCION: estas ocho SI se versionan porque README.md las referencia. Dejaron de ser
+# salida regenerable en el momento en que el README depende de ellas: sin estas, quien abra
+# el repositorio en GitHub ve ocho imagenes rotas en la seccion "Capturas", que es lo
+# primero que mira. Son ~2 MB.
+#
+# NO LAS BORRES "limpiando": comprueba antes si el README sigue apuntando a ellas. Y si
+# anades una captura al README, anadela tambien aqui.
+!docs/ui-shots/login-375-light.png
+!docs/ui-shots/login-375-dark.png
+!docs/ui-shots/login-1440-light.png
+!docs/ui-shots/login-1440-dark.png
+!docs/ui-shots/despensa-lista-375-light.png
+!docs/ui-shots/despensa-lista-375-dark.png
+!docs/ui-shots/despensa-lista-1440-light.png
+!docs/ui-shots/despensa-lista-1440-dark.png
 
 # Skills de Claude de terceros, traidas de fuera. No son trabajo del proyecto.
 .claude/skills/
